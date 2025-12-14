@@ -4,10 +4,17 @@
 
 ## 実装フロー
 
-### 1. ブランチ作成
-- `feature/<pr番号>-<簡潔な説明>` の形式でブランチを作成
+### 1. 開発環境の準備
+- 仮想環境の作成と有効化（必須）
+  ```bash
+  python3 -m venv .venv
+  source .venv/bin/activate
+  pip install -e ".[dev]" maturin
+  ```
+- ブランチ作成
+  - `feature/<pr番号>-<簡潔な説明>` の形式
   - 例: `feature/pr-02-polars-integration`
-- `main` ブランチから分岐すること
+  - `main` ブランチから分岐
 
 ### 2. TDD（テスト駆動開発）で実装
 - **Red**: まず失敗するテストを書く
@@ -17,7 +24,12 @@
 
 ### 3. テストの実行
 * **Rust**: `cargo test`
-* **Python**: `pytest python/tests` (maturin develop 後)
+* **Python**: 
+  ```bash
+  source .venv/bin/activate
+  maturin develop --extras dev
+  pytest python/tests
+  ```
 * **E2E**: `cargo run -- run pipeline.yaml` (CLI実装後)
 
 ### 4. ベンチマーク確認
