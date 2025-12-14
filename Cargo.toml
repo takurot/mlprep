@@ -1,0 +1,31 @@
+[workspace]
+members = ["."]
+resolver = "2"
+
+[package]
+name = "mlprep"
+version = "0.1.0"
+edition = "2021"
+description = "High-performance no-code data preprocessing engine"
+authors = ["Takuro Wada <public@takuro.t>"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/takurot/mlprep"
+homepage = "https://github.com/takurot/mlprep"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "mlprep"
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[dependencies]
+pyo3 = { version = "0.23", features = ["extension-module"] }
+
+[dev-dependencies]
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1

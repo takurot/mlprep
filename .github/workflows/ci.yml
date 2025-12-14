@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - feature/*
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      
+      - name: Rust Fmt
+        run: cargo fmt --all -- --check
+      
+      - name: Rust Clippy
+        run: cargo clippy --all-targets -- -D warnings
+      
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Install Ruff
+        run: pip install ruff
+      
+      - name: Python Fmt (Ruff)
+        run: ruff format --check python/
+      
+      - name: Python Lint (Ruff)
+        run: ruff check python/
+
+  test-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test
+
+  build-wheels:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Install maturin
+        run: pip install maturin
+      
+      - name: Build wheels
+        run: maturin build --release --out dist
+      
+      - name: Install built wheel
+        run: pip install mlprep --no-index --find-links dist --force-reinstall
+      
+      - name: Import check
+        run: python -c "import mlprep; print(mlprep.__version__)"

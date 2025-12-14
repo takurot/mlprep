@@ -38,7 +38,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
 
 ## Phase 1.0: Foundation & Setup
 
-### PR-01: Project Skeleton & CI Setup `[MVP]`
+### PR-01: Project Skeleton & CI Setup `[DONE]`
 * **Goal**: Rust/Pythonの混合プロジェクト構造の確立とCIの疎通。
 * **Tasks**:
   * `cargo new mlprep` (workspace)
