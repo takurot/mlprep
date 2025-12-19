@@ -8,3 +8,9 @@
 .vscode
 .coverage
 htmlcov
+
+# Data files
+bench_data.csv
+*.parquet
+test.csv
+test_p.csv

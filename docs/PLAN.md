@@ -47,7 +47,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
   * EditorConfig, Pre-commit hooks (ruff, rustfmt)
 * **Verify**: CIがGreenになること。`import mlprep` がエラーなく通ること（空モジュール）。
 
-### PR-02: Core I/O & Polars Integration `[MVP]`
+### PR-02: Core I/O & Polars Integration `[DONE]`
 * **Goal**: Rust側でPolarsを呼び出し、CSV/Parquetの読み書きができる。
 * **Deps**: PR-01
 * **Tasks**:

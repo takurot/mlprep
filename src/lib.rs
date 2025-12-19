@@ -1,3 +1,6 @@
+pub mod engine;
+pub mod io;
+
 use pyo3::prelude::*;
 
 /// A Python module implemented in Rust.
