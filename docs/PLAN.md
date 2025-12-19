@@ -60,7 +60,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
 
 ## Phase 1.1: Python Binding & Basic API
 
-### PR-03: Python I/O Bindings `[MVP]`
+### PR-03: Python I/O Bindings `[DONE]`
 * **Goal**: Pythonから `mlprep.read_csv` を実行可能にする。
 * **Deps**: PR-02
 * **Tasks**:
