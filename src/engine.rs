@@ -1,5 +1,5 @@
-use polars::prelude::*;
 use anyhow::Result;
+use polars::prelude::*;
 
 pub struct DataPipeline {
     df: LazyFrame,

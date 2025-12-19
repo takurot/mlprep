@@ -1,5 +1,5 @@
-use polars::prelude::*;
 use anyhow::Result;
+use polars::prelude::*;
 use std::path::Path;
 
 pub fn read_csv<P: AsRef<Path>>(path: P) -> Result<LazyFrame> {
@@ -29,7 +29,7 @@ mod tests {
 
         let lf = read_csv(csv_path)?;
         let df = lf.collect()?;
-        
+
         assert_eq!(df.shape(), (2, 3));
         assert_eq!(df.get_column_names(), vec!["a", "b", "c"]);
 
@@ -51,7 +51,7 @@ mod tests {
         let df_read = lf.collect()?;
 
         assert_eq!(df_read.shape(), (2, 3));
-        
+
         fs::remove_file(csv_path)?;
         fs::remove_file(parquet_path)?;
         Ok(())
