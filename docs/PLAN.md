@@ -80,7 +80,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
 
 ## Phase 1.2: Core Features Implementation
 
-### PR-05: Basic Transforms (Join, GroupBy, Window) `[MVP]`
+### PR-05: Basic Transforms (Join, GroupBy, Window) `[DONE]`
 * **Goal**: 基本的なETL操作の実装。
 * **Deps**: PR-04
 * **Tasks**:
