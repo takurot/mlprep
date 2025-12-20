@@ -184,6 +184,39 @@
 * `schema.json`：最終スキーマ
 * `lineage.json`：処理履歴（後述）
 
+### 3.4.5 Feature Store Integration（Phase 2拡張）
+
+外部Feature Store（Feast/Tecton等）との連携を可能にする。
+
+* **エクスポート形式**:
+  * Feast FeatureView定義（YAML）
+  * Feature Registry JSON（メタデータ）
+  * Tecton互換形式（オプション）
+
+* **出力例** (`feature_registry.json`):
+```json
+{
+  "features": [
+    {
+      "name": "user_age_scaled",
+      "dtype": "float64",
+      "source": "age",
+      "transform": "standard_scaler",
+      "statistics": {"mean": 35.2, "std": 12.1},
+      "created_at": "2025-01-01T00:00:00Z",
+      "version": "v1.0.0"
+    }
+  ],
+  "entity_key": "user_id",
+  "timestamp_field": "event_time"
+}
+```
+
+* **連携ワークフロー**:
+  1. `mlprep features fit` で FeatureState 生成
+  2. `mlprep features export --format feast` で Feast 定義出力
+  3. `feast apply` で Feature Store に登録
+
 ---
 
 ## 3.5 データ品質・検証（Data Quality & Validation）
@@ -215,6 +248,35 @@
 * JSON（機械可読）
 * HTML（人間可読：Phase拡張）
 * Markdown（CI向け）
+
+### 3.5.5 Quarantine Lineage（Phase 2拡張）
+
+隔離された行の完全な追跡情報を提供し、監査可能性を強化する。
+
+* `quarantine_lineage.json` フォーマット:
+```json
+{
+  "violations": [
+    {
+      "row_id": 12345,
+      "source_file": "data/input.csv",
+      "source_line": 12346,
+      "rule_id": "check_age_range",
+      "rule_type": "range",
+      "expected": {"min": 0, "max": 120},
+      "actual_value": -5,
+      "timestamp": "2025-01-01T00:00:00Z",
+      "pipeline_run_id": "run-abc123"
+    }
+  ],
+  "summary": {
+    "total_violations": 42,
+    "by_rule": {"check_age_range": 30, "check_email_format": 12}
+  }
+}
+```
+* CI/CDアラート連携（Slack/PagerDuty webhook）
+* HTML/Markdown可視化レポート生成
 
 ---
 

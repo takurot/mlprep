@@ -21,6 +21,61 @@
 
 ---
 
+## Competitive Analysis
+
+### Target Users
+
+| Target Segment | Pain Point | mlprep Value Proposition |
+|----------------|------------|-------------------------|
+| Small-Mid ML Teams | Feature Store導入は過剰だが再現性は必要 | 軽量で追加インフラ不要 |
+| CI/CD Pipelines | Python環境なしでデータ検証したい | Single Binary CLI |
+| pandas → Polars移行者 | 移行の学習コストが高い | 宣言的YAML設定 |
+
+### Competitor Comparison
+
+| Tool | Strength | mlprep Advantage |
+|------|----------|------------------|
+| **Polars** | Fastest DataFrame | YAML-first + Validation統合 |
+| **Great Expectations** | Powerful validation rules | Lightweight, Quarantine mode |
+| **dbt** | SQL-first ELT | Non-SQL use cases, Feature eng |
+| **Feast** | Production Feature Store | Local-first, No infra required |
+| **pandas** | Ubiquity | 3-30x faster |
+
+### Concerns & Mitigation
+
+| Concern | Risk | Mitigation |
+|---------|------|------------|
+| Polarsが類似機能を追加 | 中 | Lineage+Quarantine統合で差別化 |
+| 市場がdbt+GE+Feastで既に解決済み | 高 | 軽量・ローカル完結を訴求 |
+| 新しいDSL学習コスト | 中 | pandas互換モードと移行ガイド |
+
+---
+
+## Differentiation Roadmap (Phase 2+)
+
+### D-01: Quarantine + Lineage Integration
+* **Goal**: 「なぜこの行が除外されたか」の完全トレース
+* **Features**:
+  * `quarantine_lineage.json`: 違反行ごとのルールID、入力ソース、タイムスタンプ
+  * HTML/Markdownでの可視化レポート
+  * CI/CDでの自動アラート連携
+
+### D-02: Feature Store Integration
+* **Goal**: Feast/Tecton等への出力形式対応
+* **Features**:
+  * Feast FeatureView形式でのエクスポート
+  * Feature Registry JSONの生成
+  * オンライン/オフライン特徴量の統合管理
+
+### D-03: pandas Migration Mode
+* **Goal**: 既存ユーザーの移行ハードルを下げる
+* **Features**:
+  * pandas互換APIラッパー(`mlprep.compat.pandas`)
+  * 自動変換ツール（pandasコード → mlprep YAML）
+  * 移行ガイドドキュメント
+
+---
+
 ## Risks & Mitigations
 
 | Risk | Impact | Likelihood | Mitigation |
@@ -178,3 +233,14 @@ graph TD
 - [ ] Test coverage: 80%+
 - [ ] PyPI alpha release published
 - [ ] README with quickstart guide
+
+---
+
+## Success Metrics (Post-MVP)
+
+| Metric | Target | Measurement |
+|--------|--------|-------------|
+| GitHub Stars | 500+ (6 months) | Monthly tracking |
+| PyPI Downloads | 1000/week | pypistats |
+| Issue Response Time | < 48h | GitHub metrics |
+| Benchmark vs pandas | 5x+ faster | CI benchmark suite |
