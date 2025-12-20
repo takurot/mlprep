@@ -30,7 +30,7 @@ serde_yaml = "0.9.34"
 
 [features]
 extension-module = ["pyo3/extension-module"]
-default = ["extension-module"]
+default = []
 
 [dev-dependencies]
 

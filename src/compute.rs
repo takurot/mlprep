@@ -17,7 +17,7 @@ pub fn apply_pipeline(lf: LazyFrame, pipeline: Pipeline) -> Result<LazyFrame> {
 }
 
 fn apply_select(lf: LazyFrame, select: crate::dsl::Select) -> Result<LazyFrame> {
-    let cols: Vec<Expr> = select.columns.iter().map(|c| col(c)).collect();
+    let cols: Vec<Expr> = select.columns.iter().map(col).collect();
     Ok(lf.select(cols))
 }
 
@@ -51,7 +51,6 @@ fn apply_cast(lf: LazyFrame, cast: crate::dsl::Cast) -> Result<LazyFrame> {
 mod tests {
     use super::*;
     use crate::dsl::{Cast, Filter, Pipeline, Select, Step};
-    use polars::prelude::*;
     use std::collections::HashMap;
 
     #[test]
