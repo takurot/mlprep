@@ -2,6 +2,7 @@ pub mod compute;
 pub mod dsl;
 pub mod engine;
 pub mod io;
+pub mod validate;
 
 use polars::prelude::*;
 use pyo3::exceptions::PyIOError;

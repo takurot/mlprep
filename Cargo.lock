@@ -832,6 +832,7 @@ dependencies = [
  "polars",
  "pyo3",
  "pyo3-polars",
+ "regex",
  "serde",
  "serde_yaml",
  "tempfile",

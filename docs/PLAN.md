@@ -153,7 +153,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
   * `dsl::Schema` 定義とバリデーション
 * **Verify**: 欠損を含むデータで指定通りに補完・削除されるか。
 
-### PR-07: Validation Engine `[MVP]`
+### PR-07: Validation Engine `[DONE]`
 * **Goal**: データ品質チェック機能の実装。
 * **Deps**: PR-05
 * **Tasks**:
