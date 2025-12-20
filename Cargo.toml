@@ -33,6 +33,7 @@ extension-module = ["pyo3/extension-module"]
 default = []
 
 [dev-dependencies]
+tempfile = "3"
 
 [profile.release]
 strip = true
