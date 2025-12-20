@@ -14,3 +14,4 @@ bench_data.csv
 *.parquet
 test.csv
 test_p.csv
+python/mlprep/mlprep.cpython-312-darwin.so
