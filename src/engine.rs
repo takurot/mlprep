@@ -17,4 +17,9 @@ impl DataPipeline {
     pub fn get_df(&self) -> &LazyFrame {
         &self.df
     }
+
+    pub fn apply_transforms(self, pipeline: crate::dsl::Pipeline) -> Result<Self> {
+        let new_lf = crate::compute::apply_pipeline(self.df, pipeline)?;
+        Ok(Self { df: new_lf })
+    }
 }

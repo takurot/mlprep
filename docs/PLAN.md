@@ -69,7 +69,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
   * Python Tests: `pytest` でCSV読み込みテスト
 * **Verify**: `python -c "import mlprep; df = mlprep.read_csv('test.csv')"` が動く。
 
-### PR-04: Transform DSL Foundation `[MVP]`
+### PR-04: Transform DSL Foundation `[DONE]`
 * **Goal**: YAMLで定義された変換ルールをパースし、Polars Exprに変換する。
 * **Deps**: PR-02
 * **Tasks**:

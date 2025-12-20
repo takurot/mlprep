@@ -1,3 +1,5 @@
+pub mod compute;
+pub mod dsl;
 pub mod engine;
 pub mod io;
 
