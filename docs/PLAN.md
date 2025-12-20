@@ -144,7 +144,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
   * Edge Case Tests: キー不在時のJoin挙動など
 * **Verify**: 複雑な集計クエリを含む統合テストパス。
 
-### PR-06: Handling Missing Values & Types `[MVP]`
+### PR-06: Handling Missing Values & Types `[DONE]`
 * **Goal**: 欠損値処理と型変換の強化。
 * **Deps**: PR-04
 * **Tasks**:

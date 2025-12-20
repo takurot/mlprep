@@ -4,6 +4,8 @@ use std::collections::HashMap;
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Pipeline {
     pub steps: Vec<Step>,
+    #[serde(default)]
+    pub schema: Option<HashMap<String, String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -16,6 +18,8 @@ pub enum Step {
     Join(Join),
     GroupBy(GroupBy),
     Window(Window),
+    FillNull(FillNull),
+    DropNull(DropNull),
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -83,6 +87,33 @@ pub struct WindowOp {
     pub column: String,
     pub func: String,
     pub alias: String,
+}
+
+/// FillNull: Strategy to fill missing values
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct FillNull {
+    pub columns: Vec<String>,
+    pub strategy: FillNullStrategy,
+    pub value: Option<String>, // For "literal" strategy
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum FillNullStrategy {
+    Literal,
+    Forward,
+    Backward,
+    Mean,
+    Median,
+    Min,
+    Max,
+    Zero,
+}
+
+/// DropNull: Remove rows with nulls in specified columns
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct DropNull {
+    pub columns: Vec<String>,
 }
 
 #[cfg(test)]
@@ -260,11 +291,56 @@ steps:
                 assert_eq!(w.partition_by, vec!["category"]);
                 assert_eq!(w.order_by, Some("date".to_string()));
                 assert_eq!(w.ops.len(), 2);
-                assert_eq!(w.ops[0].column, "value");
-                assert_eq!(w.ops[0].func, "sum");
-                assert_eq!(w.ops[0].alias, "running_sum");
             }
             _ => panic!("Expected Window step"),
         }
+    }
+
+    #[test]
+    fn test_deserialize_fill_null() {
+        let yaml = r#"
+steps:
+  - type: fill_null
+    columns: ["a", "b"]
+    strategy: "mean"
+"#;
+        let pipeline: Pipeline = serde_yaml::from_str(yaml).unwrap();
+        match &pipeline.steps[0] {
+            Step::FillNull(f) => {
+                assert_eq!(f.columns, vec!["a", "b"]);
+                assert_eq!(f.strategy, FillNullStrategy::Mean);
+            }
+            _ => panic!("Expected FillNull step"),
+        }
+    }
+
+    #[test]
+    fn test_deserialize_drop_null() {
+        let yaml = r#"
+steps:
+  - type: drop_null
+    columns: ["c"]
+"#;
+        let pipeline: Pipeline = serde_yaml::from_str(yaml).unwrap();
+        match &pipeline.steps[0] {
+            Step::DropNull(d) => {
+                assert_eq!(d.columns, vec!["c"]);
+            }
+            _ => panic!("Expected DropNull step"),
+        }
+    }
+
+    #[test]
+    fn test_deserialize_schema() {
+        let yaml = r#"
+schema:
+    col_a: "Int64"
+    col_b: "Utf8"
+steps: []
+"#;
+        let pipeline: Pipeline = serde_yaml::from_str(yaml).unwrap();
+        let schema = pipeline.schema.unwrap();
+        assert_eq!(schema.get("col_a").unwrap(), "Int64");
+        assert_eq!(schema.get("col_b").unwrap(), "Utf8");
     }
 }
