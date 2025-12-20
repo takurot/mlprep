@@ -20,6 +20,7 @@ pub enum Step {
     Window(Window),
     FillNull(FillNull),
     DropNull(DropNull),
+    Validate(Validate),
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -114,6 +115,78 @@ pub enum FillNullStrategy {
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct DropNull {
     pub columns: Vec<String>,
+}
+
+// ============================================================================
+// Validation DSL Structures
+// ============================================================================
+
+/// Check types for data validation
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum Check {
+    NotNull,
+    Unique,
+    Range { min: Option<f64>, max: Option<f64> },
+    Regex { pattern: String },
+    Enum { values: Vec<String> },
+}
+
+/// Column-level check specification
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub struct ColumnCheck {
+    pub name: String,
+    #[serde(default)]
+    pub not_null: bool,
+    #[serde(default)]
+    pub unique: bool,
+    #[serde(default)]
+    pub range: Option<(f64, f64)>,
+    #[serde(default)]
+    pub regex: Option<String>,
+    #[serde(default, rename = "enum")]
+    pub allowed_values: Option<Vec<String>>,
+}
+
+/// Dataset-level checks
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Default)]
+pub struct DatasetCheck {
+    #[serde(default)]
+    pub row_count_min: Option<u64>,
+    #[serde(default)]
+    pub row_count_max: Option<u64>,
+    #[serde(default)]
+    pub duplicate_rate_max: Option<f64>,
+}
+
+/// Validation configuration (checks.yaml structure)
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub struct CheckConfig {
+    #[serde(default)]
+    pub columns: Vec<ColumnCheck>,
+    #[serde(default)]
+    pub dataset: Option<DatasetCheck>,
+}
+
+/// Validation execution mode
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ValidationMode {
+    /// Fail on first violation
+    #[default]
+    Strict,
+    /// Log warnings but continue
+    Warn,
+    /// Separate violating rows to quarantine output
+    Quarantine,
+}
+
+/// Validate step for pipeline
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct Validate {
+    pub checks: CheckConfig,
+    #[serde(default)]
+    pub mode: ValidationMode,
 }
 
 #[cfg(test)]

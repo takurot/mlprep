@@ -1,4 +1,4 @@
-use crate::dsl::{Agg, GroupBy, Join, Pipeline, Sort, Step, Window, WindowOp};
+use crate::dsl::{Agg, GroupBy, Join, Pipeline, Sort, Step, Validate, Window, WindowOp};
 use crate::io;
 use anyhow::{anyhow, Result};
 use polars::prelude::*;
@@ -22,6 +22,7 @@ pub fn apply_pipeline(lf: LazyFrame, pipeline: Pipeline) -> Result<LazyFrame> {
             Step::Window(w) => apply_window(current_lf, w)?,
             Step::FillNull(f) => apply_fill_null(current_lf, f)?,
             Step::DropNull(d) => apply_drop_null(current_lf, d)?,
+            Step::Validate(v) => apply_validate(current_lf, v)?,
         };
     }
 
@@ -234,6 +235,33 @@ fn apply_drop_null(lf: LazyFrame, drop_null: crate::dsl::DropNull) -> Result<Laz
     let cols: Vec<Expr> = drop_null.columns.iter().map(col).collect();
     // In Polars, drop_nulls on specific columns can be done via filter or drop_nulls(subset)
     Ok(lf.drop_nulls(Some(cols)))
+}
+
+fn apply_validate(lf: LazyFrame, validate: Validate) -> Result<LazyFrame> {
+    use crate::validate::run_validation;
+
+    // Collect the LazyFrame to run validation
+    let df = lf
+        .collect()
+        .map_err(|e| anyhow!("Failed to collect DataFrame for validation: {}", e))?;
+
+    // Run validation
+    let (valid_df, _quarantine, report) = run_validation(df, &validate.checks, &validate.mode)?;
+
+    // Log violations if any
+    if !report.passed {
+        for result in &report.results {
+            for violation in &result.violations {
+                eprintln!(
+                    "[VALIDATION] {}: {} (count: {})",
+                    violation.check_type, violation.message, violation.count
+                );
+            }
+        }
+    }
+
+    // Return the valid data as LazyFrame
+    Ok(valid_df.lazy())
 }
 
 fn apply_schema(lf: LazyFrame, schema: HashMap<String, String>) -> Result<LazyFrame> {

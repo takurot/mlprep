@@ -27,6 +27,7 @@ pyo3-polars = { version = "0.20" }
 anyhow = "1.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_yaml = "0.9.34"
+regex = "1.10"
 
 [features]
 extension-module = ["pyo3/extension-module"]
