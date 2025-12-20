@@ -246,8 +246,8 @@ fn apply_schema(lf: LazyFrame, schema: HashMap<String, String>) -> Result<LazyFr
 mod tests {
     use super::*;
     use crate::dsl::{
-        Agg, Cast, DropNull, FillNull, FillNullStrategy, Filter, GroupBy, Join, Pipeline, Select,
-        Sort, Step, Window, WindowOp,
+        Agg, Cast, DropNull, FillNull, FillNullStrategy, Filter, GroupBy, Pipeline, Select, Sort,
+        Step, Window, WindowOp,
     };
     use std::collections::HashMap;
 
