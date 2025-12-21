@@ -164,7 +164,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
 
 ## Phase 1.3: Feature Engineering & CLI
 
-### PR-08: Feature Engineering DSL `[MVP]`
+### PR-08: Feature Engineering DSL `[DONE]`
 * **Goal**: 特徴量生成（FeatureSet）のサポート。
 * **Deps**: PR-05
 * **Tasks**:

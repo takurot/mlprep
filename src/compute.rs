@@ -1,4 +1,5 @@
-use crate::dsl::{Agg, GroupBy, Join, Pipeline, Sort, Step, Validate, Window, WindowOp};
+use crate::dsl::{Agg, Features, GroupBy, Join, Pipeline, Sort, Step, Validate, Window, WindowOp};
+use crate::features;
 use crate::io;
 use anyhow::{anyhow, Result};
 use polars::prelude::*;
@@ -23,6 +24,7 @@ pub fn apply_pipeline(lf: LazyFrame, pipeline: Pipeline) -> Result<LazyFrame> {
             Step::FillNull(f) => apply_fill_null(current_lf, f)?,
             Step::DropNull(d) => apply_drop_null(current_lf, d)?,
             Step::Validate(v) => apply_validate(current_lf, v)?,
+            Step::Features(f) => apply_features(current_lf, f)?,
         };
     }
 
@@ -268,6 +270,34 @@ fn apply_schema(lf: LazyFrame, schema: HashMap<String, String>) -> Result<LazyFr
     // We treat this similarly to a cast step for the specified columns
     let cast_step = crate::dsl::Cast { columns: schema };
     apply_cast(lf, cast_step)
+}
+
+fn apply_features(lf: LazyFrame, features_step: Features) -> Result<LazyFrame> {
+    // Collect the LazyFrame to run feature engineering
+    let df = lf
+        .collect()
+        .map_err(|e| anyhow!("Failed to collect DataFrame for features: {}", e))?;
+
+    // Check if state should be loaded or computed
+    let state = if let Some(ref path) = features_step.state_path {
+        // Try to load existing state
+        if std::path::Path::new(path).exists() {
+            features::FeatureState::load(path)?
+        } else {
+            // Fit and save state
+            let new_state = features::fit_features(&df, &features_step.config)?;
+            new_state.save(path)?;
+            new_state
+        }
+    } else {
+        // No path specified, just fit (won't persist)
+        features::fit_features(&df, &features_step.config)?
+    };
+
+    // Transform the data
+    let result = features::transform_features(&df, &features_step.config, &state)?;
+
+    Ok(result.lazy())
 }
 
 #[cfg(test)]
