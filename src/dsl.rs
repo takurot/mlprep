@@ -21,6 +21,7 @@ pub enum Step {
     FillNull(FillNull),
     DropNull(DropNull),
     Validate(Validate),
+    Features(Features),
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -187,6 +188,15 @@ pub struct Validate {
     pub checks: CheckConfig,
     #[serde(default)]
     pub mode: ValidationMode,
+}
+
+/// Feature engineering step
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct Features {
+    pub config: crate::features::FeatureConfig,
+    /// Path to load/save FeatureState (optional)
+    #[serde(default)]
+    pub state_path: Option<String>,
 }
 
 #[cfg(test)]
