@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use clap::{Parser, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
+use polars::prelude::SerWriter;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -114,7 +115,7 @@ fn run_pipeline(path: &PathBuf) -> Result<()> {
     let mut final_df = processed_dp.collect()?;
     
     if output_conf.path.ends_with(".parquet") {
-        mlprep::io::write_parquet(&mut final_df, &output_conf.path)?;
+        mlprep::io::write_parquet(final_df.clone(), &output_conf.path)?;
     } else {
         // Fallback for CSV or others? io module currently only has write_parquet.
         // If user asks for CSV, we fail or implement write_csv.
