@@ -14,7 +14,7 @@ fn test_cli_run_pipeline() {
     fs::write(&input_path, "a,b\n1,10\n2,20\n3,30").unwrap();
 
     // 3. Create pipeline config
-    // Note: paths in YAML must be absolute or relative to run location. 
+    // Note: paths in YAML must be absolute or relative to run location.
     // Absolute paths are safer for test.
     let yaml = format!(
         r#"
