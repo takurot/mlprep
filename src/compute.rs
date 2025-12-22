@@ -324,7 +324,10 @@ mod tests {
         });
 
         let pipeline = Pipeline {
+            inputs: vec![],
             steps: vec![step],
+            outputs: vec![],
+            runtime: None,
             schema: None,
         };
         let result = apply_pipeline(lf, pipeline).unwrap().collect().unwrap();
@@ -346,7 +349,10 @@ mod tests {
         });
 
         let pipeline = Pipeline {
+            inputs: vec![],
             steps: vec![step],
+            outputs: vec![],
+            runtime: None,
             schema: None,
         };
         let result = apply_pipeline(lf, pipeline).unwrap().collect().unwrap();
@@ -370,7 +376,10 @@ mod tests {
         });
 
         let pipeline = Pipeline {
+            inputs: vec![],
             steps: vec![step],
+            outputs: vec![],
+            runtime: None,
             schema: None,
         };
         let result = apply_pipeline(lf, pipeline).unwrap().collect().unwrap();
@@ -393,7 +402,10 @@ mod tests {
         });
 
         let pipeline = Pipeline {
+            inputs: vec![],
             steps: vec![step],
+            outputs: vec![],
+            runtime: None,
             schema: None,
         };
         let result = apply_pipeline(lf, pipeline).unwrap().collect().unwrap();
@@ -419,7 +431,10 @@ mod tests {
         });
 
         let pipeline = Pipeline {
+            inputs: vec![],
             steps: vec![step],
+            outputs: vec![],
+            runtime: None,
             schema: None,
         };
         let result = apply_pipeline(lf, pipeline).unwrap().collect().unwrap();
@@ -445,7 +460,10 @@ mod tests {
         });
 
         let pipeline = Pipeline {
+            inputs: vec![],
             steps: vec![step],
+            outputs: vec![],
+            runtime: None,
             schema: None,
         };
         let result = apply_pipeline(lf, pipeline).unwrap().collect().unwrap();
@@ -482,7 +500,10 @@ mod tests {
         });
 
         let pipeline = Pipeline {
+            inputs: vec![],
             steps: vec![step],
+            outputs: vec![],
+            runtime: None,
             schema: None,
         };
         let result = apply_pipeline(lf, pipeline)
@@ -528,7 +549,10 @@ mod tests {
         });
 
         let pipeline = Pipeline {
+            inputs: vec![],
             steps: vec![step],
+            outputs: vec![],
+            runtime: None,
             schema: None,
         };
         let result = apply_pipeline(lf, pipeline).unwrap().collect().unwrap();
@@ -560,7 +584,10 @@ mod tests {
         });
 
         let pipeline = Pipeline {
+            inputs: vec![],
             steps: vec![step],
+            outputs: vec![],
+            runtime: None,
             schema: None,
         };
         let result = apply_pipeline(lf, pipeline).unwrap().collect().unwrap();
@@ -594,7 +621,10 @@ mod tests {
         });
 
         let pipeline = Pipeline {
+            inputs: vec![],
             steps: vec![step],
+            outputs: vec![],
+            runtime: None,
             schema: None,
         };
         let result = apply_pipeline(lf, pipeline).unwrap().collect().unwrap();
@@ -620,7 +650,10 @@ mod tests {
         });
 
         let pipeline = Pipeline {
+            inputs: vec![],
             steps: vec![step],
+            outputs: vec![],
+            runtime: None,
             schema: None,
         };
         let result = apply_pipeline(lf, pipeline).unwrap().collect().unwrap();
@@ -654,7 +687,10 @@ mod tests {
         });
 
         let pipeline = Pipeline {
+            inputs: vec![],
             steps: vec![step],
+            outputs: vec![],
+            runtime: None,
             schema: None,
         };
         let result = apply_pipeline(lf, pipeline).unwrap().collect().unwrap();
@@ -678,7 +714,10 @@ mod tests {
         });
 
         let pipeline = Pipeline {
+            inputs: vec![],
             steps: vec![step],
+            outputs: vec![],
+            runtime: None,
             schema: None,
         };
         let result = apply_pipeline(lf, pipeline).unwrap().collect().unwrap();

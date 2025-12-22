@@ -1,14 +1,46 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Pipeline {
+    #[serde(default)]
+    pub inputs: Vec<Input>,
     pub steps: Vec<Step>,
+    #[serde(default)]
+    pub outputs: Vec<Output>,
+    #[serde(default)]
+    pub runtime: Option<RuntimeConfig>,
     #[serde(default)]
     pub schema: Option<HashMap<String, String>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub struct Input {
+    pub path: String,
+    #[serde(default)]
+    pub format: Option<String>,
+    pub schema: Option<String>,
+    pub infer_rows: Option<usize>,
+    pub null_values: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub struct Output {
+    pub path: String,
+    #[serde(default)]
+    pub format: Option<String>,
+    pub compression: Option<String>,
+    pub partition_by: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Default)]
+pub struct RuntimeConfig {
+    pub threads: Option<String>,
+    pub cache: Option<bool>,
+    pub memory_limit: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Step {
     Select(Select),
@@ -24,23 +56,23 @@ pub enum Step {
     Features(Features),
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Select {
     pub columns: Vec<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Filter {
     pub condition: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Cast {
     pub columns: HashMap<String, String>,
 }
 
 /// Sort: Order rows by one or more columns
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Sort {
     pub by: Vec<String>,
     #[serde(default)]
@@ -48,7 +80,7 @@ pub struct Sort {
 }
 
 /// Join: Combine two DataFrames
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Join {
     pub right_path: String,
     pub left_on: Vec<String>,
@@ -62,7 +94,7 @@ fn default_join_how() -> String {
 }
 
 /// GroupBy: Aggregate data by groups
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct GroupBy {
     pub by: Vec<String>,
     pub aggs: HashMap<String, Agg>,
@@ -76,7 +108,7 @@ pub struct Agg {
 }
 
 /// Window: Window/rolling functions
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Window {
     pub partition_by: Vec<String>,
     pub order_by: Option<String>,
@@ -92,14 +124,14 @@ pub struct WindowOp {
 }
 
 /// FillNull: Strategy to fill missing values
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct FillNull {
     pub columns: Vec<String>,
     pub strategy: FillNullStrategy,
     pub value: Option<String>, // For "literal" strategy
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum FillNullStrategy {
     Literal,
@@ -113,7 +145,7 @@ pub enum FillNullStrategy {
 }
 
 /// DropNull: Remove rows with nulls in specified columns
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct DropNull {
     pub columns: Vec<String>,
 }
@@ -183,7 +215,7 @@ pub enum ValidationMode {
 }
 
 /// Validate step for pipeline
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Validate {
     pub checks: CheckConfig,
     #[serde(default)]
@@ -191,7 +223,7 @@ pub struct Validate {
 }
 
 /// Feature engineering step
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Features {
     pub config: crate::features::FeatureConfig,
     /// Path to load/save FeatureState (optional)
