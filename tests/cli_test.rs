@@ -35,7 +35,7 @@ outputs:
     // cargo run -- run <config>
     // In tests, we can use CARGO_BIN_EXE_<name> env var provided by cargo.
     let status = Command::new(env!("CARGO_BIN_EXE_mlprep"))
-        .args(&["run", config_path.to_str().unwrap()])
+        .args(["run", config_path.to_str().unwrap()])
         .status()
         .expect("Failed to run mlprep");
 
