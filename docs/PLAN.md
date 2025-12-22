@@ -173,7 +173,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
   * `feature_state.json` の保存・読み込みロジック
 * **Verify**: Trainデータでfitし、Testデータでtransformした結果が整合しているか。
 
-### PR-09: CLI "run" Command `[MVP]`
+### PR-09: CLI "run" Command `[DONE]`
 * **Goal**: コマンドラインからパイプライン全体を実行する。
 * **Deps**: PR-03, PR-04, PR-07, PR-08
 * **Tasks**:
