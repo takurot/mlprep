@@ -101,7 +101,8 @@ jobs:
       name: pypi
       url: https://pypi.org/p/mlprep
     permissions:
-      id-token: write  # IMPORTANT: failing to enable this will choke OIDC 
+      contents: read
+      id-token: write
     steps:
       - uses: actions/download-artifact@v4
       - name: Publish to PyPI
