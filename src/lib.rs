@@ -3,12 +3,14 @@ pub mod dsl;
 pub mod engine;
 pub mod features;
 pub mod io;
+pub mod runner;
 pub mod validate;
 
 use polars::prelude::*;
-use pyo3::exceptions::PyIOError;
+use pyo3::exceptions::{PyIOError, PyRuntimeError};
 use pyo3::prelude::*;
 use pyo3_polars::PyDataFrame;
+use std::path::PathBuf;
 
 /// Wrapper for DataFrame that exposes it to Python
 #[pyclass(name = "DataFrame")]
@@ -68,6 +70,15 @@ fn write_parquet(df: &MlPrepDataFrame, path: &str) -> PyResult<()> {
     Ok(())
 }
 
+/// Run a pipeline from a YAML configuration file path
+#[pyfunction]
+fn run_pipeline(path: &str) -> PyResult<()> {
+    let path_buf = PathBuf::from(path);
+    runner::execution_pipeline(&path_buf)
+        .map_err(|e| PyRuntimeError::new_err(format!("Pipeline execution failed: {}", e)))?;
+    Ok(())
+}
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn mlprep(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -76,5 +87,6 @@ fn mlprep(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_csv, m)?)?;
     m.add_function(wrap_pyfunction!(read_parquet, m)?)?;
     m.add_function(wrap_pyfunction!(write_parquet, m)?)?;
+    m.add_function(wrap_pyfunction!(run_pipeline, m)?)?;
     Ok(())
 }

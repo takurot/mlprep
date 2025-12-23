@@ -1,4 +1,4 @@
-from .mlprep import *  # noqa: F403
+from .mlprep import *  # noqa: F403, F401
 
 __doc__ = mlprep.__doc__  # noqa: F405
 if hasattr(mlprep, "__all__"):  # noqa: F405
