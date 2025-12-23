@@ -1,0 +1,12 @@
+name: mlflow_experiment
+inputs:
+  - path: raw_data.csv
+    format: csv
+
+steps:
+  - type: select
+    columns: [col1, col2]
+
+outputs:
+  - path: output.parquet
+    format: parquet

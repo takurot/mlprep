@@ -1,0 +1,16 @@
+name: sklearn_prep
+inputs:
+  - path: raw_data.csv
+    format: csv
+
+steps:
+  - type: select
+    columns: [feature1, feature2, feature3, target]
+  - type: features
+    config:
+      - columns: [feature1, feature2]
+        method: standard
+
+outputs:
+  - path: processed_train.parquet
+    format: parquet
