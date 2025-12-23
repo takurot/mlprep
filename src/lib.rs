@@ -25,6 +25,10 @@ impl MlPrepDataFrame {
         Ok(py_df.into_pyobject(py)?.into_any().unbind())
     }
 
+    fn __len__(&self) -> usize {
+        self.inner.height()
+    }
+
     fn __repr__(&self) -> String {
         format!("{}", self.inner)
     }
