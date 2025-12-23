@@ -184,7 +184,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
 
 ## Phase 1.4: Optimization & Release
 
-### PR-10: Benchmarking & Optimization `[MVP-Optional]`
+### PR-10: Benchmarking & Optimization `[DONE]`
 * **Goal**: 目標性能（CSV 1GB < 5s）の達成確認とチューニング。
 * **Deps**: PR-09
 * **Tasks**:
