@@ -197,9 +197,26 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
 * **Verify**: `docs/BENCHMARK.md` に結果を記録。目標未達なら原因調査・修正。
 * **Note**: Alpha版リリースは基本機能動作でOK。パフォーマンスは継続改善。
 
-### PR-11: Documentation & Release `[MVP]`
+### PR-11: Examples & Use Cases `[MVP]`
+* **Goal**: ユーザーが主要なユースケースを素早く理解できるサンプル集を提供。
+* **Deps**: PR-09
+* **Tasks**:
+  * `examples/` フォルダ作成
+  * **基本例**:
+    * `01_basic_etl/` - CSV読み込み → フィルタ → Parquet出力
+    * `02_data_validation/` - スキーマ検証 + quarantineモード
+    * `03_feature_engineering/` - fit/transform による特徴量生成
+  * **ツール連携例**:
+    * `04_scikit_learn_integration/` - mlprep → scikit-learn パイプライン
+    * `05_mlflow_experiment/` - MLflow実験でのデータ前処理
+    * `06_airflow_dag/` - Airflow DAGでのmlprep CLI呼び出し
+    * `07_dvc_pipeline/` - DVC パイプラインとの統合
+  * 各例に `README.md`, `pipeline.yaml`, サンプルデータ, 実行スクリプトを含む
+* **Verify**: 各exampleが `mlprep run` で正常動作すること。
+
+### PR-12: Documentation & Release `[MVP]`
 * **Goal**: v0.1.0-alpha リリース。
-* **Deps**: PR-10
+* **Deps**: PR-11
 * **Tasks**:
   * API Docs 生成 (pdoc / rustdoc)
   * `README.md` 更新（Getting Started）
@@ -221,7 +238,8 @@ graph TD
     PR05 --> PR08[PR-08: Feature Eng]
     PR03 & PR07 & PR08 --> PR09[PR-09: CLI]
     PR09 --> PR10[PR-10: Optimize]
-    PR10 --> PR11[PR-11: Release]
+    PR09 --> PR11[PR-11: Examples]
+    PR10 & PR11 --> PR12[PR-12: Release]
 ```
 
 ---
