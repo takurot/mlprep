@@ -24,7 +24,8 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --find-interpreter
+          # Explicitly specify Python versions (PyO3 0.23.x supports up to 3.13)
+          args: --release --out dist -i python3.10 python3.11 python3.12 python3.13
           sccache: 'true'
           manylinux: auto
       - name: Upload wheels
@@ -48,7 +49,8 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --find-interpreter
+          # Explicitly specify Python versions (PyO3 0.23.x supports up to 3.13)
+          args: --release --out dist -i python3.10 python3.11 python3.12 python3.13
           sccache: 'true'
       - name: Upload wheels
         uses: actions/upload-artifact@v4
@@ -70,7 +72,8 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --find-interpreter
+          # Explicitly specify Python versions (PyO3 0.23.x supports up to 3.13)
+          args: --release --out dist -i python3.10 python3.11 python3.12 python3.13
           sccache: 'true'
       - name: Upload wheels
         uses: actions/upload-artifact@v4
