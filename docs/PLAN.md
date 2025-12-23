@@ -214,7 +214,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
   * 各例に `README.md`, `pipeline.yaml`, サンプルデータ, 実行スクリプトを含む
 * **Verify**: 各exampleが `mlprep run` で正常動作すること。
 
-### PR-12: Documentation & Release `[MVP]`
+### PR-12: Documentation & Release `[DONE]`
 * **Goal**: v0.1.0-alpha リリース。
 * **Deps**: PR-11
 * **Tasks**:
