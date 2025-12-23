@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
-use tracing::{Level};
+use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
 
 #[cfg(not(target_env = "msvc"))]
