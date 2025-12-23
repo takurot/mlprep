@@ -225,6 +225,129 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
 
 ---
 
+## Phase 2: Production Readiness
+
+本番環境での利用を見据えた品質強化フェーズ。
+
+### PR-13: Error Handling & User Experience `[TODO]`
+* **Goal**: エラーメッセージの改善とユーザー体験の向上。
+* **Deps**: PR-12
+* **Tasks**:
+  * エラーコード体系の整備（`MLPREP-E001`形式）
+  * ユーザーフレンドリーなエラーメッセージ（原因＋解決策の提示）
+  * YAML構文エラー時の行番号・カラム表示
+  * `--verbose` / `--quiet` フラグの実装
+  * カラー出力対応（`colored` crate）
+* **Verify**: 主要なエラーパターンで適切なメッセージが表示されること。
+
+### PR-14: Logging & Observability `[TODO]`
+* **Goal**: 本番運用に必要なログ・メトリクス基盤の整備。
+* **Deps**: PR-13
+* **Tasks**:
+  * 構造化ログ出力（JSON形式）：`--log-format json`
+  * ログレベル制御（`MLPREP_LOG`環境変数）
+  * 処理メトリクス出力（行数、処理時間、メモリ使用量）
+  * `trace_id` / `run_id` の自動付与
+  * `lineage.json` 出力（入力ファイルハッシュ、環境情報、ステップ履歴）
+* **Verify**: 1パイプライン実行で完全なトレース情報が出力されること。
+
+### PR-15: Security Hardening `[TODO]`
+* **Goal**: セキュリティリスクの軽減。
+* **Deps**: PR-12
+* **Tasks**:
+  * 入力パスのサンドボックス化（`--allowed-paths`オプション）
+  * Regexタイムアウト制限（DoS対策）
+  * 依存クレートの脆弱性スキャン（`cargo-audit` CI統合）
+  * YAML爆弾対策（最大ネスト深度・サイズ制限）
+  * 機密データのログマスキング（`--mask-columns`）
+* **Verify**: `cargo audit` でCritical/High脆弱性ゼロ。
+
+### PR-16: Performance Optimization `[TODO]`
+* **Goal**: 大規模データでの安定動作と性能保証。
+* **Deps**: PR-10
+* **Tasks**:
+  * Streaming処理モード（メモリに収まらないデータ対応）
+  * メモリ使用量上限設定（`--memory-limit`）
+  * `jemalloc` / `mimalloc` の選択的利用
+  * Polars Lazy評価の最適化（predicate pushdown確認）
+  * 10GBデータでのベンチマーク追加
+* **Verify**: 10GBデータを16GBメモリ環境で処理可能。
+
+### PR-17: Comprehensive Documentation `[TODO]`
+* **Goal**: 新規ユーザーがセルフサービスで使い始められるドキュメント。
+* **Deps**: PR-12
+* **Tasks**:
+  * **Getting Started Guide**: 5分で動くチュートリアル
+  * **Pipeline YAML Reference**: 全オプションの詳細説明
+  * **Migration Guide**: pandas → mlprep 移行手順
+  * **Troubleshooting Guide**: よくあるエラーと解決策
+  * **API Reference**: Python API (`pdoc`) と CLI (`--help` の充実)
+  * **Video/GIF**: 30秒デモ動画
+* **Verify**: 初見ユーザーがドキュメントのみで基本パイプラインを構築できること。
+
+### PR-18: Beta Testing Program `[TODO]`
+* **Goal**: 実ユーザーからのフィードバック収集。
+* **Deps**: PR-17
+* **Tasks**:
+  * ベータテスター募集（3〜5名）
+  * フィードバック収集テンプレート作成
+  * Issue triageプロセスの確立
+  * 週次フィードバックミーティング（2週間）
+  * Critical issueの修正
+* **Verify**: ベータテスターが実業務で1パイプラインを運用完了。
+
+### PR-19: CI/CD Hardening `[TODO]`
+* **Goal**: リリースプロセスの自動化と品質ゲート強化。
+* **Deps**: PR-16
+* **Tasks**:
+  * テストカバレッジ計測（`tarpaulin` / `coverage.py`）
+  * カバレッジ閾値チェック（80%未満でCI失敗）
+  * 性能退行検知（ベンチマーク結果の自動比較）
+  * Semantic Release自動化（Changelog生成）
+  * PyPIへの自動publish（タグpush時）
+  * GitHub Releasesへのバイナリアップロード
+* **Verify**: `git tag v0.2.0` で自動リリース完了。
+
+### PR-20: v1.0.0 Stable Release `[TODO]`
+* **Goal**: 本番運用可能な安定版リリース。
+* **Deps**: PR-13〜PR-19
+* **Tasks**:
+  * 全PRのマージ確認
+  * CHANGELOG.md 最終更新
+  * Breaking changes有無の確認とマイグレーションガイド
+  * v1.0.0タグ作成・リリース
+  * アナウンス（README、Twitter/X、Hacker News等）
+* **Verify**: `pip install mlprep==1.0.0` で本番利用開始可能。
+
+---
+
+## Phase 2 Dependency Graph
+
+```mermaid
+graph TD
+    PR12[PR-12: Release v0.1.0] --> PR13[PR-13: Error Handling]
+    PR12 --> PR15[PR-15: Security]
+    PR12 --> PR17[PR-17: Documentation]
+    PR10[PR-10: Optimize] --> PR16[PR-16: Performance]
+    PR13 --> PR14[PR-14: Logging]
+    PR17 --> PR18[PR-18: Beta Testing]
+    PR16 --> PR19[PR-19: CI/CD]
+    PR13 & PR14 & PR15 & PR16 & PR17 & PR18 & PR19 --> PR20[PR-20: v1.0.0]
+```
+
+---
+
+## Phase 2 Completion Criteria
+
+- [ ] All `[TODO]` PRs in Phase 2 merged
+- [ ] Test coverage: 80%+
+- [ ] Zero Critical/High vulnerabilities
+- [ ] 10GB benchmark passing
+- [ ] 3+ beta testers completed real pipeline
+- [ ] v1.0.0 published to PyPI
+
+---
+
 ## Task Dependency Graph
 
 ```mermaid
