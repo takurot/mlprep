@@ -2,6 +2,7 @@ import argparse
 import sys
 import mlprep
 
+
 def main():
     parser = argparse.ArgumentParser(description="mlprep CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -18,6 +19,7 @@ def main():
         except Exception as e:
             print(f"Error: {e}", file=sys.stderr)
             sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
