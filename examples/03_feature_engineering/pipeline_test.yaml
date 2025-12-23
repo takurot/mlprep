@@ -1,0 +1,19 @@
+name: feature_eng_test
+inputs:
+  - path: test_data.csv
+    format: csv
+
+steps:
+  - type: features
+    config:
+      features:
+        - column: age
+          transform: standard_scale
+        - column: income
+          transform: standard_scale
+        - column: city
+          transform: one_hot_encode
+
+outputs:
+  - path: test_features.parquet
+    format: parquet
