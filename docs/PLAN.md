@@ -197,7 +197,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
 * **Verify**: `docs/BENCHMARK.md` に結果を記録。目標未達なら原因調査・修正。
 * **Note**: Alpha版リリースは基本機能動作でOK。パフォーマンスは継続改善。
 
-### PR-11: Examples & Use Cases `[MVP]`
+### PR-11: Examples & Use Cases `[DONE]`
 * **Goal**: ユーザーが主要なユースケースを素早く理解できるサンプル集を提供。
 * **Deps**: PR-09
 * **Tasks**:
