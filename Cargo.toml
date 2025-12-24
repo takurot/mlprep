@@ -20,6 +20,10 @@ name = "mlprep"
 crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
+[[bin]]
+name = "mlprep"
+path = "src/main.rs"
+
 [dependencies]
 pyo3 = { version = "0.23" }
 polars = { version = "0.46", features = ["lazy", "csv", "parquet", "sql"] }
