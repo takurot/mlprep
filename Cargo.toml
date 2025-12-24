@@ -3,7 +3,7 @@ members = ["."]
 resolver = "2"
 
 [package]
-name = "mlprep"
+name = "mlprep-rust"
 version = "0.1.0"
 edition = "2021"
 description = "High-performance no-code data preprocessing engine"
