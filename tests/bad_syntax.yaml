@@ -1,0 +1,5 @@
+steps:
+  - type: select
+    columns: ["a", "b"]
+  - type: invalid_step  # This should fail parsing
+    unknown_field: 123

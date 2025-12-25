@@ -1,6 +1,7 @@
 pub mod compute;
 pub mod dsl;
 pub mod engine;
+pub mod errors;
 pub mod features;
 pub mod io;
 pub mod runner;

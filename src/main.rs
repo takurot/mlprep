@@ -1,5 +1,5 @@
-use anyhow::Result;
 use clap::{Parser, Subcommand};
+use miette::Result;
 use std::path::PathBuf;
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
@@ -18,6 +18,14 @@ static GLOBAL: Jemalloc = Jemalloc;
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+
+    /// Increase logging verbosity (Info -> Debug)
+    #[arg(short, long, global = true)]
+    verbose: bool,
+
+    /// Silence all logs
+    #[arg(short, long, global = true)]
+    quiet: bool,
 }
 
 #[derive(Subcommand)]
@@ -31,16 +39,28 @@ enum Commands {
 }
 
 fn main() -> Result<()> {
+    // Parse CLI args first to configure logging
+    let cli = Cli::parse();
+
+    // Determine log level
+    let log_level = if cli.quiet {
+        Level::ERROR
+    } else if cli.verbose {
+        Level::DEBUG
+    } else {
+        Level::INFO
+    };
+
     // Initialize logging
     let subscriber = FmtSubscriber::builder()
-        .with_max_level(Level::INFO)
+        .with_max_level(log_level)
         .finish();
-    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
-
-    let cli = Cli::parse();
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("setting default subscriber failed");
 
     match &cli.command {
         Commands::Run { pipeline } => {
+            // miette::Result handles returning errors nicely
             mlprep::runner::execution_pipeline(pipeline)?;
         }
     }
