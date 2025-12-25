@@ -55,7 +55,12 @@ fn apply_cast(lf: LazyFrame, cast: crate::dsl::Cast) -> MlPrepResult<LazyFrame> 
             "Float32" => DataType::Float32,
             "String" | "Utf8" => DataType::String,
             "Boolean" => DataType::Boolean,
-            _ => return Err(MlPrepError::ConfigError(serde_yaml::Error::custom(format!("Unsupported data type: {}", dtype_str)), None)),
+            _ => {
+                return Err(MlPrepError::ConfigError(
+                    serde_yaml::Error::custom(format!("Unsupported data type: {}", dtype_str)),
+                    None,
+                ))
+            }
         };
         exprs.push(col(col_name.as_str()).cast(dtype));
     }
@@ -65,7 +70,9 @@ fn apply_cast(lf: LazyFrame, cast: crate::dsl::Cast) -> MlPrepResult<LazyFrame> 
 
 fn apply_sort(lf: LazyFrame, sort: Sort) -> MlPrepResult<LazyFrame> {
     if sort.by.is_empty() {
-        return Err(MlPrepError::TransformError("Sort requires at least one column".to_string()));
+        return Err(MlPrepError::TransformError(
+            "Sort requires at least one column".to_string(),
+        ));
     }
 
     let cols: Vec<PlSmallStr> = sort.by.iter().map(|s| s.as_str().into()).collect();
@@ -107,7 +114,12 @@ fn apply_join(lf: LazyFrame, join: Join) -> MlPrepResult<LazyFrame> {
         "right" => JoinType::Right,
         "outer" | "full" => JoinType::Full,
         "cross" => JoinType::Cross,
-        _ => return Err(MlPrepError::TransformError(format!("Unsupported join type: {}", join.how))),
+        _ => {
+            return Err(MlPrepError::TransformError(format!(
+                "Unsupported join type: {}",
+                join.how
+            )))
+        }
     };
 
     Ok(lf.join(right_lf, left_on, right_on, JoinArgs::new(join_type)))
@@ -115,7 +127,9 @@ fn apply_join(lf: LazyFrame, join: Join) -> MlPrepResult<LazyFrame> {
 
 fn apply_groupby(lf: LazyFrame, groupby: GroupBy) -> MlPrepResult<LazyFrame> {
     if groupby.by.is_empty() {
-        return Err(MlPrepError::TransformError("GroupBy requires at least one column".to_string()));
+        return Err(MlPrepError::TransformError(
+            "GroupBy requires at least one column".to_string(),
+        ));
     }
 
     let group_cols: Vec<Expr> = groupby.by.iter().map(col).collect();
@@ -141,7 +155,12 @@ fn build_agg_expr(col_name: &str, agg: &Agg) -> MlPrepResult<Expr> {
         "last" => col(col_name).last(),
         "std" | "stddev" => col(col_name).std(1), // ddof=1
         "var" | "variance" => col(col_name).var(1),
-        _ => return Err(MlPrepError::TransformError(format!("Unsupported aggregation function: {}", agg.func))),
+        _ => {
+            return Err(MlPrepError::TransformError(format!(
+                "Unsupported aggregation function: {}",
+                agg.func
+            )))
+        }
     };
 
     // Apply alias if specified
@@ -187,7 +206,12 @@ fn build_window_expr(
         "cumsum" => col(&op.column).cum_sum(false),
         "cummax" => col(&op.column).cum_max(false),
         "cummin" => col(&op.column).cum_min(false),
-        _ => return Err(MlPrepError::TransformError(format!("Unsupported window function: {}", op.func))),
+        _ => {
+            return Err(MlPrepError::TransformError(format!(
+                "Unsupported window function: {}",
+                op.func
+            )))
+        }
     };
 
     // Apply over() for window partitioning
@@ -207,10 +231,9 @@ fn apply_fill_null(lf: LazyFrame, fill_null: crate::dsl::FillNull) -> MlPrepResu
         let col_expr = col(&col_name);
         let filled_expr = match fill_null.strategy {
             crate::dsl::FillNullStrategy::Literal => {
-                let val = fill_null
-                    .value
-                    .as_ref()
-                    .ok_or_else(|| MlPrepError::TransformError("Literal strategy requires a value".to_string()))?;
+                let val = fill_null.value.as_ref().ok_or_else(|| {
+                    MlPrepError::TransformError("Literal strategy requires a value".to_string())
+                })?;
                 // Attempt to infer type from string value, or just cast as needed.
                 // For simplicity, we create a literal expression. Polars handles type coercion often,
                 // but explicit casting might be safer. For now, let's treat as lit(val).
@@ -244,9 +267,9 @@ fn apply_validate(lf: LazyFrame, validate: Validate) -> MlPrepResult<LazyFrame> 
     use crate::validate::run_validation;
 
     // Collect the LazyFrame to run validation
-    let df = lf
-        .collect()
-        .map_err(|e| MlPrepError::TransformError(format!("Failed to collect DataFrame for validation: {}", e)))?;
+    let df = lf.collect().map_err(|e| {
+        MlPrepError::TransformError(format!("Failed to collect DataFrame for validation: {}", e))
+    })?;
 
     // Run validation
     let (valid_df, _quarantine, report) = run_validation(df, &validate.checks, &validate.mode)
@@ -276,20 +299,24 @@ fn apply_schema(lf: LazyFrame, schema: HashMap<String, String>) -> MlPrepResult<
 
 fn apply_features(lf: LazyFrame, features_step: Features) -> MlPrepResult<LazyFrame> {
     // Collect the LazyFrame to run feature engineering
-    let df = lf
-        .collect()
-        .map_err(|e| MlPrepError::TransformError(format!("Failed to collect DataFrame for features: {}", e)))?;
+    let df = lf.collect().map_err(|e| {
+        MlPrepError::TransformError(format!("Failed to collect DataFrame for features: {}", e))
+    })?;
 
     // Check if state should be loaded or computed
     let state = if let Some(ref path) = features_step.state_path {
         // Try to load existing state
         if std::path::Path::new(path).exists() {
-            features::FeatureState::load(path).map_err(|e| MlPrepError::FeatureError(format!("Failed to load feature state: {}", e)))?
+            features::FeatureState::load(path).map_err(|e| {
+                MlPrepError::FeatureError(format!("Failed to load feature state: {}", e))
+            })?
         } else {
             // Fit and save state
             let new_state = features::fit_features(&df, &features_step.config)
-               .map_err(|e| MlPrepError::FeatureError(format!("Failed to fit features: {}", e)))?;
-            new_state.save(path).map_err(|e| MlPrepError::FeatureError(format!("Failed to save feature state: {}", e)))?;
+                .map_err(|e| MlPrepError::FeatureError(format!("Failed to fit features: {}", e)))?;
+            new_state.save(path).map_err(|e| {
+                MlPrepError::FeatureError(format!("Failed to save feature state: {}", e))
+            })?;
             new_state
         }
     } else {

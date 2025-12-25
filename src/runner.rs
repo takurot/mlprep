@@ -69,7 +69,8 @@ pub fn execution_pipeline(path: &PathBuf) -> MlPrepResult<()> {
     } else {
         // Fallback for CSV
         if output_conf.path.ends_with(".csv") {
-            let mut file = std::fs::File::create(&output_conf.path).map_err(MlPrepError::IoError)?;
+            let mut file =
+                std::fs::File::create(&output_conf.path).map_err(MlPrepError::IoError)?;
             CsvWriter::new(&mut file)
                 .finish(&mut final_df)
                 .map_err(MlPrepError::PolarsError)?;

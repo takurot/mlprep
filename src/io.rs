@@ -48,7 +48,9 @@ mod tests {
         let csv_content = "a,b,c\n1,2,3\n4,5,6";
         fs::write(csv_path, csv_content)?;
 
-        let df = read_csv(csv_path)?.collect().map_err(MlPrepError::PolarsError)?;
+        let df = read_csv(csv_path)?
+            .collect()
+            .map_err(MlPrepError::PolarsError)?;
         write_parquet(df, parquet_path)?;
 
         let lf = read_parquet(parquet_path)?;

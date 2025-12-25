@@ -8,13 +8,13 @@ pub enum MlPrepError {
         code("MLPREP-001"),
         help("Please check your pipeline.yaml syntax and structure.")
     )]
-    ConfigError(#[source] serde_yaml::Error, #[label("here")] Option<SourceSpan>),
+    ConfigError(
+        #[source] serde_yaml::Error,
+        #[label("here")] Option<SourceSpan>,
+    ),
 
     #[error("I/O error: {0}")]
-    #[diagnostic(
-        code("MLPREP-002"),
-        help("Check file paths and permissions.")
-    )]
+    #[diagnostic(code("MLPREP-002"), help("Check file paths and permissions."))]
     IoError(#[from] std::io::Error),
 
     #[error("Polars error: {0}")]
@@ -25,17 +25,11 @@ pub enum MlPrepError {
     PolarsError(#[from] polars::error::PolarsError),
 
     #[error("Validation failed: {0}")]
-    #[diagnostic(
-        code("MLPREP-004"),
-        help("Data validation rules were violated.")
-    )]
+    #[diagnostic(code("MLPREP-004"), help("Data validation rules were violated."))]
     ValidationError(String),
-    
+
     #[error("Transformation error: {0}")]
-    #[diagnostic(
-        code("MLPREP-005"),
-        help("Failed to apply transformation.")
-    )]
+    #[diagnostic(code("MLPREP-005"), help("Failed to apply transformation."))]
     TransformError(String),
 
     #[error("Feature engineering error: {0}")]

@@ -27,7 +27,7 @@ impl Pipeline {
                 let _line = loc.line();
                 let _col = loc.column();
                 // Placeholder: Use (0,0) length 0 for now as we don't have byte offset
-                 SourceSpan::new(0.into(), 0.into())
+                SourceSpan::new(0.into(), 0.into())
             });
             MlPrepError::ConfigError(e, _range)
         })
