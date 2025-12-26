@@ -6,8 +6,8 @@ pub mod features;
 pub mod io;
 pub mod observability;
 pub mod runner;
-pub mod validate;
 pub mod security;
+pub mod validate;
 
 use polars::prelude::*;
 use pyo3::exceptions::{PyIOError, PyRuntimeError};

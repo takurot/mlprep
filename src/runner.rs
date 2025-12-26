@@ -12,16 +12,29 @@ use std::time::Instant;
 use tracing::info;
 use uuid::Uuid;
 
-pub fn execution_pipeline(path: &PathBuf, run_id: Uuid, security_config: crate::security::SecurityConfig) -> MlPrepResult<()> {
+pub fn execution_pipeline(
+    path: &PathBuf,
+    run_id: Uuid,
+    security_config: crate::security::SecurityConfig,
+) -> MlPrepResult<()> {
     let mut metrics = Metrics::new();
     info!("Loading pipeline from {:?}", path);
 
     // 0. Security Context
-    let security_context = crate::security::SecurityContext::new(security_config)
-        .map_err(|e| MlPrepError::ConfigError(serde_yaml::Error::custom(format!("Security context init failed: {}", e)), None))?;
-    
+    let security_context = crate::security::SecurityContext::new(security_config).map_err(|e| {
+        MlPrepError::ConfigError(
+            serde_yaml::Error::custom(format!("Security context init failed: {}", e)),
+            None,
+        )
+    })?;
+
     // Validate pipeline file path
-    security_context.validate_path(path).map_err(|e| MlPrepError::IoError(std::io::Error::new(std::io::ErrorKind::PermissionDenied, e.to_string())))?;
+    security_context.validate_path(path).map_err(|e| {
+        MlPrepError::IoError(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            e.to_string(),
+        ))
+    })?;
 
     let pipeline = Pipeline::from_path(path)?;
 
@@ -37,7 +50,12 @@ pub fn execution_pipeline(path: &PathBuf, run_id: Uuid, security_config: crate::
     let mut input_stats = Vec::new();
     for input in &pipeline.inputs {
         // Validate input path
-        security_context.validate_path(&input.path).map_err(|e| MlPrepError::IoError(std::io::Error::new(std::io::ErrorKind::PermissionDenied, e.to_string())))?;
+        security_context.validate_path(&input.path).map_err(|e| {
+            MlPrepError::IoError(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                e.to_string(),
+            ))
+        })?;
 
         let metadata = std::fs::metadata(&input.path).map_err(MlPrepError::IoError)?;
         let hash = observability::compute_file_hash(&input.path).map_err(MlPrepError::IoError)?;
@@ -91,7 +109,14 @@ pub fn execution_pipeline(path: &PathBuf, run_id: Uuid, security_config: crate::
     }
 
     let output_conf = &pipeline.outputs[0];
-    security_context.validate_path(&output_conf.path).map_err(|e| MlPrepError::IoError(std::io::Error::new(std::io::ErrorKind::PermissionDenied, e.to_string())))?;
+    security_context
+        .validate_path(&output_conf.path)
+        .map_err(|e| {
+            MlPrepError::IoError(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                e.to_string(),
+            ))
+        })?;
 
     info!(
         "Executing pipeline and writing output to: {:?}",
@@ -167,10 +192,16 @@ mod tests {
         std::fs::create_dir(&restricted_dir).unwrap();
 
         let allowed_file = allowed_dir.join("input.csv");
-        File::create(&allowed_file).unwrap().write_all(b"a,b\n1,2").unwrap();
+        File::create(&allowed_file)
+            .unwrap()
+            .write_all(b"a,b\n1,2")
+            .unwrap();
 
         let restricted_file = restricted_dir.join("secret.csv");
-        File::create(&restricted_file).unwrap().write_all(b"x,y\n8,9").unwrap();
+        File::create(&restricted_file)
+            .unwrap()
+            .write_all(b"x,y\n8,9")
+            .unwrap();
 
         let config = SecurityConfig {
             allowed_paths: Some(vec![allowed_dir.clone()]),
