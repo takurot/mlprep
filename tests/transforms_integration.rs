@@ -22,6 +22,7 @@ steps:
 "#;
 
     let pipeline: Pipeline = serde_yaml::from_str(yaml)?;
+    let data_pipeline = DataPipeline::new(lf);
     let result_df = data_pipeline
         .apply_transforms(
             pipeline,
@@ -114,6 +115,7 @@ steps:
 "#;
 
     let pipeline: Pipeline = serde_yaml::from_str(yaml)?;
+    let data_pipeline = DataPipeline::new(lf);
     let result_df = data_pipeline
         .apply_transforms(
             pipeline,
@@ -167,6 +169,7 @@ steps:
     );
 
     let pipeline: Pipeline = serde_yaml::from_str(&yaml)?;
+    let data_pipeline = DataPipeline::new(lf);
     let result_df = data_pipeline
         .apply_transforms(
             pipeline,
@@ -175,12 +178,12 @@ steps:
         .collect()?;
 
     assert_eq!(result_df.height(), 4);
-    let column_names: Vec<&str> = result_df
+    let column_names: Vec<String> = result_df
         .get_column_names()
         .iter()
-        .map(|s| s.as_str())
+        .map(|s| s.to_string())
         .collect();
-    assert!(column_names.contains(&"name"));
+    assert!(column_names.contains(&"name".to_string()));
 
     let names = result_df.column("name")?.str()?;
     assert_eq!(names.get(0), Some("Alice"));
@@ -215,6 +218,7 @@ steps:
 "#;
 
     let pipeline: Pipeline = serde_yaml::from_str(yaml)?;
+    let data_pipeline = DataPipeline::new(lf);
     let result_df = data_pipeline
         .apply_transforms(
             pipeline,

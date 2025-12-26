@@ -135,7 +135,7 @@ outputs: []
     // Unique check works on whole column.
     // Let's check stderr for masking.
 
-    let stderr = String::from_utf8_lossy(&output.stderr);
+    let _stderr = String::from_utf8_lossy(&output.stderr);
     // Unique check failure message often includes the duplicate value.
     // If masking works, "secret@example.com" should NOT be visible, or should be "***".
     // I need to confirm Unique check error message includes the value.
