@@ -4,6 +4,7 @@ pub mod engine;
 pub mod errors;
 pub mod features;
 pub mod io;
+pub mod observability;
 pub mod runner;
 pub mod validate;
 
@@ -12,6 +13,7 @@ use pyo3::exceptions::{PyIOError, PyRuntimeError};
 use pyo3::prelude::*;
 use pyo3_polars::PyDataFrame;
 use std::path::PathBuf;
+use uuid::Uuid;
 
 /// Wrapper for DataFrame that exposes it to Python
 #[pyclass(name = "DataFrame")]
@@ -73,9 +75,10 @@ fn write_parquet(df: &MlPrepDataFrame, path: &str) -> PyResult<()> {
 
 /// Run a pipeline from a YAML configuration file path
 #[pyfunction]
-fn run_pipeline(path: &str) -> PyResult<()> {
+fn run_pipeline(path: String) -> PyResult<()> {
     let path_buf = PathBuf::from(path);
-    runner::execution_pipeline(&path_buf)
+    let run_id = Uuid::new_v4();
+    runner::execution_pipeline(&path_buf, run_id)
         .map_err(|e| PyRuntimeError::new_err(format!("Pipeline execution failed: {}", e)))?;
     Ok(())
 }

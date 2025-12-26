@@ -1,8 +1,9 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use miette::Result;
 use std::path::PathBuf;
 use tracing::Level;
-use tracing_subscriber::FmtSubscriber;
+use tracing_subscriber::EnvFilter;
+use uuid::Uuid;
 
 #[cfg(not(target_env = "msvc"))]
 use tikv_jemallocator::Jemalloc;
@@ -10,6 +11,12 @@ use tikv_jemallocator::Jemalloc;
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
+
+#[derive(Clone, ValueEnum, Debug)]
+enum LogFormat {
+    Text,
+    Json,
+}
 
 #[derive(Parser)]
 #[command(name = "mlprep")]
@@ -26,6 +33,10 @@ struct Cli {
     /// Silence all logs
     #[arg(short, long, global = true)]
     quiet: bool,
+
+    /// Log format (text or json)
+    #[arg(long, value_enum, global = true, default_value_t = LogFormat::Text)]
+    log_format: LogFormat,
 }
 
 #[derive(Subcommand)]
@@ -39,11 +50,11 @@ enum Commands {
 }
 
 fn main() -> Result<()> {
-    // Parse CLI args first to configure logging
+    // Parse CLI args first
     let cli = Cli::parse();
 
-    // Determine log level
-    let log_level = if cli.quiet {
+    // Determine default log level
+    let default_level = if cli.quiet {
         Level::ERROR
     } else if cli.verbose {
         Level::DEBUG
@@ -51,14 +62,37 @@ fn main() -> Result<()> {
         Level::INFO
     };
 
-    // Initialize logging
-    let subscriber = FmtSubscriber::builder().with_max_level(log_level).finish();
-    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+    // Initialize logging with EnvFilter (MLPREP_LOG > CLI args)
+    let filter = EnvFilter::builder()
+        .with_default_directive(default_level.into())
+        .with_env_var("MLPREP_LOG")
+        .from_env_lossy();
+
+    let run_id = Uuid::new_v4();
+
+    match cli.log_format {
+        LogFormat::Json => {
+            tracing_subscriber::fmt()
+                .with_env_filter(filter)
+                .json()
+                .with_span_list(false)
+                .with_current_span(false)
+                .init();
+        }
+        LogFormat::Text => {
+            tracing_subscriber::fmt()
+                .with_env_filter(filter)
+                .init();
+        }
+    }
+
+    // Root span with run_id
+    let _span = tracing::info_span!("root", run_id = %run_id).entered();
 
     match &cli.command {
         Commands::Run { pipeline } => {
             // miette::Result handles returning errors nicely
-            mlprep::runner::execution_pipeline(pipeline)?;
+            mlprep::runner::execution_pipeline(pipeline, run_id)?;
         }
     }
 
