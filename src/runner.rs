@@ -125,13 +125,14 @@ pub fn execution_pipeline(path: &PathBuf, run_id: Uuid) -> MlPrepResult<()> {
 
     // Write lineage.json
     let lineage_file = std::fs::File::create("lineage.json").map_err(MlPrepError::IoError)?;
-    serde_json::to_writer_pretty(lineage_file, &lineage).map_err(|e| MlPrepError::Unknown(e.into()))?;
+    serde_json::to_writer_pretty(lineage_file, &lineage)
+        .map_err(|e| MlPrepError::Unknown(e.into()))?;
 
     info!("Lineage written to lineage.json");
     if let Ok(m_json) = serde_json::to_string(&metrics) {
-         info!("Metrics: {}", m_json);
+        info!("Metrics: {}", m_json);
     }
-    
+
     info!("Pipeline completed successfully.");
     Ok(())
 }

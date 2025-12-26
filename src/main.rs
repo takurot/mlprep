@@ -80,9 +80,7 @@ fn main() -> Result<()> {
                 .init();
         }
         LogFormat::Text => {
-            tracing_subscriber::fmt()
-                .with_env_filter(filter)
-                .init();
+            tracing_subscriber::fmt().with_env_filter(filter).init();
         }
     }
 
