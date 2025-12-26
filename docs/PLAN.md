@@ -229,7 +229,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
 
 本番環境での利用を見据えた品質強化フェーズ。
 
-### PR-13: Error Handling & User Experience `[TODO]`
+### PR-13: Error Handling & User Experience `[DONE]`
 * **Goal**: エラーメッセージの改善とユーザー体験の向上。
 * **Deps**: PR-12
 * **Tasks**:

@@ -1,24 +1,24 @@
 use crate::dsl::Pipeline;
 use crate::engine::DataPipeline;
+use crate::errors::{MlPrepError, MlPrepResult};
 use crate::io;
-use anyhow::{anyhow, Result};
 use indicatif::{ProgressBar, ProgressStyle};
 use polars::prelude::*;
-use std::fs::File;
-use std::io::BufReader;
+use serde::de::Error;
 use std::path::PathBuf;
 use tracing::info;
 
-pub fn execution_pipeline(path: &PathBuf) -> Result<()> {
+pub fn execution_pipeline(path: &PathBuf) -> MlPrepResult<()> {
     info!("Loading pipeline from {:?}", path);
 
-    let file = File::open(path)?;
-    let reader = BufReader::new(file);
-    let pipeline: Pipeline = serde_yaml::from_reader(reader)?;
+    let pipeline = Pipeline::from_path(path)?;
 
     // 1. Inputs
     if pipeline.inputs.is_empty() {
-        return Err(anyhow!("No inputs specified in pipeline"));
+        return Err(MlPrepError::ConfigError(
+            serde_yaml::Error::custom("No inputs specified in pipeline"),
+            None,
+        ));
     }
 
     // For MVP, handle first input
@@ -38,7 +38,8 @@ pub fn execution_pipeline(path: &PathBuf) -> Result<()> {
     let pb = ProgressBar::new(1);
     pb.set_style(
         ProgressStyle::default_bar()
-            .template("{spinner:.green} [{elapsed_precise}] {msg}")?
+            .template("{spinner:.green} [{elapsed_precise}] {msg}")
+            .map_err(|e| MlPrepError::Unknown(e.into()))? // Template error is rare/internal
             .progress_chars("#>-"),
     );
 
@@ -68,12 +69,18 @@ pub fn execution_pipeline(path: &PathBuf) -> Result<()> {
     } else {
         // Fallback for CSV
         if output_conf.path.ends_with(".csv") {
-            let mut file = std::fs::File::create(&output_conf.path)?;
-            CsvWriter::new(&mut file).finish(&mut final_df)?;
+            let mut file =
+                std::fs::File::create(&output_conf.path).map_err(MlPrepError::IoError)?;
+            CsvWriter::new(&mut file)
+                .finish(&mut final_df)
+                .map_err(MlPrepError::PolarsError)?;
         } else {
-            return Err(anyhow!(
-                "Unsupported output format for file: {}",
-                output_conf.path
+            return Err(MlPrepError::ConfigError(
+                serde_yaml::Error::custom(format!(
+                    "Unsupported output format for file: {}",
+                    output_conf.path
+                )),
+                None,
             ));
         }
     }

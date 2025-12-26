@@ -14,6 +14,32 @@ pub struct Pipeline {
     pub schema: Option<HashMap<String, String>>,
 }
 
+use crate::errors::{MlPrepError, MlPrepResult};
+use miette::SourceSpan;
+use std::io::Read;
+use std::path::Path;
+
+impl Pipeline {
+    pub fn from_reader<R: Read>(reader: R) -> MlPrepResult<Self> {
+        serde_yaml::from_reader(reader).map_err(|e| {
+            // Serde YAML error locations are 0-indexed line/col
+            let _range = e.location().map(|loc| {
+                let _line = loc.line();
+                let _col = loc.column();
+                // Placeholder: Use (0,0) length 0 for now as we don't have byte offset
+                SourceSpan::new(0.into(), 0.into())
+            });
+            MlPrepError::ConfigError(e, _range)
+        })
+    }
+
+    pub fn from_path<P: AsRef<Path>>(path: P) -> MlPrepResult<Self> {
+        let file = std::fs::File::open(path).map_err(MlPrepError::IoError)?;
+        let reader = std::io::BufReader::new(file);
+        Self::from_reader(reader)
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct Input {
     pub path: String,
