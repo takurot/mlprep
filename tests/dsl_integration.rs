@@ -33,7 +33,10 @@ steps:
 
     // 4. Execute
     let data_pipeline = DataPipeline::new(lf);
-    let result_pipeline = data_pipeline.apply_transforms(pipeline)?;
+    let result_pipeline = data_pipeline.apply_transforms(
+        pipeline,
+        &mlprep::security::SecurityContext::new(Default::default()).unwrap(),
+    )?;
     let result_df = result_pipeline.collect()?;
 
     // 5. Verify

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde::de::Error;
 use std::collections::HashMap;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -34,6 +35,13 @@ impl Pipeline {
     }
 
     pub fn from_path<P: AsRef<Path>>(path: P) -> MlPrepResult<Self> {
+        let metadata = std::fs::metadata(path.as_ref()).map_err(MlPrepError::IoError)?;
+        if metadata.len() > 10 * 1024 * 1024 {
+            return Err(MlPrepError::ConfigError(
+                serde_yaml::Error::custom("Pipeline YAML exceeds 10MB limit"),
+                None,
+            ));
+        }
         let file = std::fs::File::open(path).map_err(MlPrepError::IoError)?;
         let reader = std::io::BufReader::new(file);
         Self::from_reader(reader)

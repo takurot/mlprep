@@ -22,8 +22,12 @@ steps:
 "#;
 
     let pipeline: Pipeline = serde_yaml::from_str(yaml)?;
-    let data_pipeline = DataPipeline::new(lf);
-    let result_df = data_pipeline.apply_transforms(pipeline)?.collect()?;
+    let result_df = data_pipeline
+        .apply_transforms(
+            pipeline,
+            &mlprep::security::SecurityContext::new(Default::default()).unwrap(),
+        )?
+        .collect()?;
 
     assert_eq!(result_df.height(), 5);
     let cat = result_df.column("category")?.str()?;
@@ -65,7 +69,10 @@ steps:
     let pipeline: Pipeline = serde_yaml::from_str(yaml)?;
     let data_pipeline = DataPipeline::new(lf);
     let result_df = data_pipeline
-        .apply_transforms(pipeline)?
+        .apply_transforms(
+            pipeline,
+            &mlprep::security::SecurityContext::new(Default::default()).unwrap(),
+        )?
         .collect()?
         .sort(["region"], Default::default())?;
 
@@ -107,8 +114,12 @@ steps:
 "#;
 
     let pipeline: Pipeline = serde_yaml::from_str(yaml)?;
-    let data_pipeline = DataPipeline::new(lf);
-    let result_df = data_pipeline.apply_transforms(pipeline)?.collect()?;
+    let result_df = data_pipeline
+        .apply_transforms(
+            pipeline,
+            &mlprep::security::SecurityContext::new(Default::default()).unwrap(),
+        )?
+        .collect()?;
 
     assert_eq!(result_df.height(), 4);
     let dept_total = result_df.column("dept_total")?.i32()?;
@@ -156,8 +167,12 @@ steps:
     );
 
     let pipeline: Pipeline = serde_yaml::from_str(&yaml)?;
-    let data_pipeline = DataPipeline::new(lf);
-    let result_df = data_pipeline.apply_transforms(pipeline)?.collect()?;
+    let result_df = data_pipeline
+        .apply_transforms(
+            pipeline,
+            &mlprep::security::SecurityContext::new(Default::default()).unwrap(),
+        )?
+        .collect()?;
 
     assert_eq!(result_df.height(), 4);
     let column_names: Vec<&str> = result_df
@@ -200,8 +215,12 @@ steps:
 "#;
 
     let pipeline: Pipeline = serde_yaml::from_str(yaml)?;
-    let data_pipeline = DataPipeline::new(lf);
-    let result_df = data_pipeline.apply_transforms(pipeline)?.collect()?;
+    let result_df = data_pipeline
+        .apply_transforms(
+            pipeline,
+            &mlprep::security::SecurityContext::new(Default::default()).unwrap(),
+        )?
+        .collect()?;
 
     // After filter: removes (2024-01, A, 50) since 50 < 100
     // After groupby:
@@ -246,7 +265,12 @@ steps:
 
     let pipeline: Pipeline = serde_yaml::from_str(yaml)?;
     let data_pipeline = DataPipeline::new(lf);
-    let result_df = data_pipeline.apply_transforms(pipeline)?.collect()?;
+    let result_df = data_pipeline
+        .apply_transforms(
+            pipeline,
+            &mlprep::security::SecurityContext::new(Default::default()).unwrap(),
+        )?
+        .collect()?;
 
     // All rows filtered out -> empty result
     assert_eq!(result_df.height(), 0);

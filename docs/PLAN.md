@@ -251,7 +251,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
   * `lineage.json` 出力（入力ファイルハッシュ、環境情報、ステップ履歴）
 * **Verify**: 1パイプライン実行で完全なトレース情報が出力されること。
 
-### PR-15: Security Hardening `[TODO]`
+### PR-15: Security Hardening `[DONE]`
 * **Goal**: セキュリティリスクの軽減。
 * **Deps**: PR-12
 * **Tasks**:
