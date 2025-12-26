@@ -240,7 +240,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
   * カラー出力対応（`colored` crate）
 * **Verify**: 主要なエラーパターンで適切なメッセージが表示されること。
 
-### PR-14: Logging & Observability `[TODO]`
+### PR-14: Logging & Observability `[DONE]`
 * **Goal**: 本番運用に必要なログ・メトリクス基盤の整備。
 * **Deps**: PR-13
 * **Tasks**:
