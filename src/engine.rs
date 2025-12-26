@@ -18,8 +18,12 @@ impl DataPipeline {
         &self.df
     }
 
-    pub fn apply_transforms(self, pipeline: crate::dsl::Pipeline) -> MlPrepResult<Self> {
-        let new_lf = crate::compute::apply_pipeline(self.df, pipeline)?;
+    pub fn apply_transforms(
+        self,
+        pipeline: crate::dsl::Pipeline,
+        security_context: &crate::security::SecurityContext,
+    ) -> MlPrepResult<Self> {
+        let new_lf = crate::compute::apply_pipeline(self.df, pipeline, security_context)?;
         Ok(Self { df: new_lf })
     }
 }

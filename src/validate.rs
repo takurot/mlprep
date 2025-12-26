@@ -310,6 +310,7 @@ pub fn run_validation(
     df: DataFrame,
     config: &CheckConfig,
     mode: &ValidationMode,
+    _masker: &crate::security::Masker,
 ) -> Result<(DataFrame, Option<DataFrame>, ValidationReport)> {
     let mut report = ValidationReport::new();
 
@@ -535,8 +536,9 @@ mod tests {
             dataset: None,
         };
 
+        let masker = crate::security::Masker::new(vec![]);
         let (valid_df, quarantine_df, report) =
-            run_validation(df, &config, &ValidationMode::Quarantine).unwrap();
+            run_validation(df, &config, &ValidationMode::Quarantine, &masker).unwrap();
 
         assert!(!report.passed);
         assert_eq!(valid_df.height(), 3); // rows with age 25, 35, 45
@@ -563,7 +565,8 @@ mod tests {
             dataset: None,
         };
 
-        let result = run_validation(df, &config, &ValidationMode::Strict);
+        let masker = crate::security::Masker::new(vec![]);
+        let result = run_validation(df, &config, &ValidationMode::Strict, &masker);
         assert!(result.is_err());
     }
 
@@ -586,8 +589,9 @@ mod tests {
             dataset: None,
         };
 
+        let masker = crate::security::Masker::new(vec![]);
         let (valid_df, quarantine_df, report) =
-            run_validation(df, &config, &ValidationMode::Warn).unwrap();
+            run_validation(df, &config, &ValidationMode::Warn, &masker).unwrap();
 
         assert!(!report.passed); // validation failed
         assert_eq!(valid_df.height(), 3); // but all rows are kept

@@ -12,9 +12,29 @@ use std::time::Instant;
 use tracing::info;
 use uuid::Uuid;
 
-pub fn execution_pipeline(path: &PathBuf, run_id: Uuid) -> MlPrepResult<()> {
+pub fn execution_pipeline(
+    path: &PathBuf,
+    run_id: Uuid,
+    security_config: crate::security::SecurityConfig,
+) -> MlPrepResult<()> {
     let mut metrics = Metrics::new();
     info!("Loading pipeline from {:?}", path);
+
+    // 0. Security Context
+    let security_context = crate::security::SecurityContext::new(security_config).map_err(|e| {
+        MlPrepError::ConfigError(
+            serde_yaml::Error::custom(format!("Security context init failed: {}", e)),
+            None,
+        )
+    })?;
+
+    // Validate pipeline file path
+    security_context.validate_path(path).map_err(|e| {
+        MlPrepError::IoError(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            e.to_string(),
+        ))
+    })?;
 
     let pipeline = Pipeline::from_path(path)?;
 
@@ -29,6 +49,14 @@ pub fn execution_pipeline(path: &PathBuf, run_id: Uuid) -> MlPrepResult<()> {
     // Capture Input Stats
     let mut input_stats = Vec::new();
     for input in &pipeline.inputs {
+        // Validate input path
+        security_context.validate_path(&input.path).map_err(|e| {
+            MlPrepError::IoError(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                e.to_string(),
+            ))
+        })?;
+
         let metadata = std::fs::metadata(&input.path).map_err(MlPrepError::IoError)?;
         let hash = observability::compute_file_hash(&input.path).map_err(MlPrepError::IoError)?;
         input_stats.push(InputFileStats {
@@ -64,7 +92,7 @@ pub fn execution_pipeline(path: &PathBuf, run_id: Uuid) -> MlPrepResult<()> {
 
     pb.set_message("Building execution graph...");
     let start_build = Instant::now();
-    let processed_dp = dp.apply_transforms(pipeline.clone())?;
+    let processed_dp = dp.apply_transforms(pipeline.clone(), &security_context)?;
     metrics.record_step("build_graph", start_build.elapsed());
     pb.finish_with_message("Execution graph built.");
 
@@ -81,6 +109,15 @@ pub fn execution_pipeline(path: &PathBuf, run_id: Uuid) -> MlPrepResult<()> {
     }
 
     let output_conf = &pipeline.outputs[0];
+    security_context
+        .validate_path(&output_conf.path)
+        .map_err(|e| {
+            MlPrepError::IoError(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                e.to_string(),
+            ))
+        })?;
+
     info!(
         "Executing pipeline and writing output to: {:?}",
         output_conf.path
@@ -135,4 +172,52 @@ pub fn execution_pipeline(path: &PathBuf, run_id: Uuid) -> MlPrepResult<()> {
 
     info!("Pipeline completed successfully.");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+
+    use crate::security::{SecurityConfig, SecurityContext};
+    use std::fs::File;
+    use std::io::Write;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_sandboxing() {
+        let dir = tempdir().unwrap();
+        let allowed_dir = dir.path().join("allowed");
+        std::fs::create_dir(&allowed_dir).unwrap();
+
+        let restricted_dir = dir.path().join("restricted");
+        std::fs::create_dir(&restricted_dir).unwrap();
+
+        let allowed_file = allowed_dir.join("input.csv");
+        File::create(&allowed_file)
+            .unwrap()
+            .write_all(b"a,b\n1,2")
+            .unwrap();
+
+        let restricted_file = restricted_dir.join("secret.csv");
+        File::create(&restricted_file)
+            .unwrap()
+            .write_all(b"x,y\n8,9")
+            .unwrap();
+
+        let config = SecurityConfig {
+            allowed_paths: Some(vec![allowed_dir.clone()]),
+            mask_columns: None,
+        };
+
+        let context = SecurityContext::new(config).unwrap();
+
+        assert!(context.validate_path(&allowed_file).is_ok());
+        assert!(context.validate_path(&restricted_file).is_err());
+
+        // Test non-existent allowed path
+        let non_existent_out = allowed_dir.join("output.parquet");
+        assert!(context.validate_path(&non_existent_out).is_ok());
+
+        let non_existent_restricted = restricted_dir.join("output.parquet");
+        assert!(context.validate_path(&non_existent_restricted).is_err());
+    }
 }

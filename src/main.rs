@@ -37,6 +37,14 @@ struct Cli {
     /// Log format (text or json)
     #[arg(long, value_enum, global = true, default_value_t = LogFormat::Text)]
     log_format: LogFormat,
+
+    /// Allowed paths for I/O sandboxing (files must be within these paths)
+    #[arg(long, value_name = "PATH", global = true)]
+    allowed_paths: Option<Vec<PathBuf>>,
+
+    /// Columns to mask in logs
+    #[arg(long, value_name = "COL", global = true)]
+    mask_columns: Option<Vec<String>>,
 }
 
 #[derive(Subcommand)]
@@ -90,7 +98,11 @@ fn main() -> Result<()> {
     match &cli.command {
         Commands::Run { pipeline } => {
             // miette::Result handles returning errors nicely
-            mlprep::runner::execution_pipeline(pipeline, run_id)?;
+            let security_config = mlprep::security::SecurityConfig {
+                allowed_paths: cli.allowed_paths,
+                mask_columns: cli.mask_columns,
+            };
+            mlprep::runner::execution_pipeline(pipeline, run_id, security_config)?;
         }
     }
 

@@ -6,7 +6,11 @@ use polars::prelude::*;
 use serde::de::Error;
 use std::collections::HashMap;
 
-pub fn apply_pipeline(lf: LazyFrame, pipeline: Pipeline) -> MlPrepResult<LazyFrame> {
+pub fn apply_pipeline(
+    lf: LazyFrame,
+    pipeline: Pipeline,
+    security_context: &crate::security::SecurityContext,
+) -> MlPrepResult<LazyFrame> {
     let mut current_lf = lf;
 
     if let Some(schema) = pipeline.schema {
@@ -24,7 +28,7 @@ pub fn apply_pipeline(lf: LazyFrame, pipeline: Pipeline) -> MlPrepResult<LazyFra
             Step::Window(w) => apply_window(current_lf, w)?,
             Step::FillNull(f) => apply_fill_null(current_lf, f)?,
             Step::DropNull(d) => apply_drop_null(current_lf, d)?,
-            Step::Validate(v) => apply_validate(current_lf, v)?,
+            Step::Validate(v) => apply_validate(current_lf, v, security_context)?,
             Step::Features(f) => apply_features(current_lf, f)?,
         };
     }
@@ -263,7 +267,11 @@ fn apply_drop_null(lf: LazyFrame, drop_null: crate::dsl::DropNull) -> MlPrepResu
     Ok(lf.drop_nulls(Some(cols)))
 }
 
-fn apply_validate(lf: LazyFrame, validate: Validate) -> MlPrepResult<LazyFrame> {
+fn apply_validate(
+    lf: LazyFrame,
+    validate: Validate,
+    security_context: &crate::security::SecurityContext,
+) -> MlPrepResult<LazyFrame> {
     use crate::validate::run_validation;
 
     // Collect the LazyFrame to run validation
@@ -272,8 +280,13 @@ fn apply_validate(lf: LazyFrame, validate: Validate) -> MlPrepResult<LazyFrame> 
     })?;
 
     // Run validation
-    let (valid_df, _quarantine, report) = run_validation(df, &validate.checks, &validate.mode)
-        .map_err(|e| MlPrepError::ValidationError(format!("Validation execution failed: {}", e)))?;
+    let (valid_df, _quarantine, report) = run_validation(
+        df,
+        &validate.checks,
+        &validate.mode,
+        security_context.masker(),
+    )
+    .map_err(|e| MlPrepError::ValidationError(format!("Validation execution failed: {}", e)))?;
 
     // Log violations if any
     if !report.passed {
@@ -362,7 +375,14 @@ mod tests {
             runtime: None,
             schema: None,
         };
-        let result = apply_pipeline(lf, pipeline).unwrap().collect().unwrap();
+        let result = apply_pipeline(
+            lf,
+            pipeline,
+            &crate::security::SecurityContext::new(Default::default()).unwrap(),
+        )
+        .unwrap()
+        .collect()
+        .unwrap();
 
         assert_eq!(result.get_column_names(), &["a", "c"]);
     }
@@ -387,7 +407,14 @@ mod tests {
             runtime: None,
             schema: None,
         };
-        let result = apply_pipeline(lf, pipeline).unwrap().collect().unwrap();
+        let result = apply_pipeline(
+            lf,
+            pipeline,
+            &crate::security::SecurityContext::new(Default::default()).unwrap(),
+        )
+        .unwrap()
+        .collect()
+        .unwrap();
 
         assert_eq!(result.height(), 2);
         let a = result.column("a").unwrap().i32().unwrap();
@@ -414,7 +441,14 @@ mod tests {
             runtime: None,
             schema: None,
         };
-        let result = apply_pipeline(lf, pipeline).unwrap().collect().unwrap();
+        let result = apply_pipeline(
+            lf,
+            pipeline,
+            &crate::security::SecurityContext::new(Default::default()).unwrap(),
+        )
+        .unwrap()
+        .collect()
+        .unwrap();
 
         assert_eq!(result.column("a").unwrap().dtype(), &DataType::Float64);
     }
@@ -440,7 +474,14 @@ mod tests {
             runtime: None,
             schema: None,
         };
-        let result = apply_pipeline(lf, pipeline).unwrap().collect().unwrap();
+        let result = apply_pipeline(
+            lf,
+            pipeline,
+            &crate::security::SecurityContext::new(Default::default()).unwrap(),
+        )
+        .unwrap()
+        .collect()
+        .unwrap();
 
         let a = result.column("a").unwrap().i32().unwrap();
         assert_eq!(a.get(0), Some(1));
@@ -469,7 +510,14 @@ mod tests {
             runtime: None,
             schema: None,
         };
-        let result = apply_pipeline(lf, pipeline).unwrap().collect().unwrap();
+        let result = apply_pipeline(
+            lf,
+            pipeline,
+            &crate::security::SecurityContext::new(Default::default()).unwrap(),
+        )
+        .unwrap()
+        .collect()
+        .unwrap();
 
         let a = result.column("a").unwrap().i32().unwrap();
         assert_eq!(a.get(0), Some(3));
@@ -498,7 +546,14 @@ mod tests {
             runtime: None,
             schema: None,
         };
-        let result = apply_pipeline(lf, pipeline).unwrap().collect().unwrap();
+        let result = apply_pipeline(
+            lf,
+            pipeline,
+            &crate::security::SecurityContext::new(Default::default()).unwrap(),
+        )
+        .unwrap()
+        .collect()
+        .unwrap();
 
         let a = result.column("a").unwrap().i32().unwrap();
         let b = result.column("b").unwrap().i32().unwrap();
@@ -538,11 +593,15 @@ mod tests {
             runtime: None,
             schema: None,
         };
-        let result = apply_pipeline(lf, pipeline)
-            .unwrap()
-            .sort(["category"], Default::default())
-            .collect()
-            .unwrap();
+        let result = apply_pipeline(
+            lf,
+            pipeline,
+            &crate::security::SecurityContext::new(Default::default()).unwrap(),
+        )
+        .unwrap()
+        .sort(["category"], Default::default())
+        .collect()
+        .unwrap();
 
         assert_eq!(result.height(), 2);
         let total = result.column("total").unwrap().i32().unwrap();
@@ -587,7 +646,14 @@ mod tests {
             runtime: None,
             schema: None,
         };
-        let result = apply_pipeline(lf, pipeline).unwrap().collect().unwrap();
+        let result = apply_pipeline(
+            lf,
+            pipeline,
+            &crate::security::SecurityContext::new(Default::default()).unwrap(),
+        )
+        .unwrap()
+        .collect()
+        .unwrap();
 
         assert_eq!(result.height(), 1);
         let avg = result.column("avg_value").unwrap().f64().unwrap();
@@ -622,7 +688,14 @@ mod tests {
             runtime: None,
             schema: None,
         };
-        let result = apply_pipeline(lf, pipeline).unwrap().collect().unwrap();
+        let result = apply_pipeline(
+            lf,
+            pipeline,
+            &crate::security::SecurityContext::new(Default::default()).unwrap(),
+        )
+        .unwrap()
+        .collect()
+        .unwrap();
 
         assert_eq!(result.height(), 4);
         let cat_total = result.column("category_total").unwrap().i32().unwrap();
@@ -659,7 +732,14 @@ mod tests {
             runtime: None,
             schema: None,
         };
-        let result = apply_pipeline(lf, pipeline).unwrap().collect().unwrap();
+        let result = apply_pipeline(
+            lf,
+            pipeline,
+            &crate::security::SecurityContext::new(Default::default()).unwrap(),
+        )
+        .unwrap()
+        .collect()
+        .unwrap();
 
         let running_sum = result.column("running_sum").unwrap().i32().unwrap();
         assert_eq!(running_sum.get(0), Some(10));
@@ -688,7 +768,14 @@ mod tests {
             runtime: None,
             schema: None,
         };
-        let result = apply_pipeline(lf, pipeline).unwrap().collect().unwrap();
+        let result = apply_pipeline(
+            lf,
+            pipeline,
+            &crate::security::SecurityContext::new(Default::default()).unwrap(),
+        )
+        .unwrap()
+        .collect()
+        .unwrap();
 
         let a = result.column("a").unwrap();
         // Since we filled with "0", polars might coerce to whatever it finds or we might have needed a cast.
@@ -725,7 +812,14 @@ mod tests {
             runtime: None,
             schema: None,
         };
-        let result = apply_pipeline(lf, pipeline).unwrap().collect().unwrap();
+        let result = apply_pipeline(
+            lf,
+            pipeline,
+            &crate::security::SecurityContext::new(Default::default()).unwrap(),
+        )
+        .unwrap()
+        .collect()
+        .unwrap();
 
         let a = result.column("a").unwrap().f64().unwrap();
         assert_eq!(a.get(1), Some(2.0)); // Mean of 1 and 3 is 2
@@ -752,7 +846,14 @@ mod tests {
             runtime: None,
             schema: None,
         };
-        let result = apply_pipeline(lf, pipeline).unwrap().collect().unwrap();
+        let result = apply_pipeline(
+            lf,
+            pipeline,
+            &crate::security::SecurityContext::new(Default::default()).unwrap(),
+        )
+        .unwrap()
+        .collect()
+        .unwrap();
 
         assert_eq!(result.height(), 2);
         let a = result.column("a").unwrap().i32().unwrap();

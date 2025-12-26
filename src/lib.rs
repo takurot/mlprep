@@ -6,6 +6,7 @@ pub mod features;
 pub mod io;
 pub mod observability;
 pub mod runner;
+pub mod security;
 pub mod validate;
 
 use polars::prelude::*;
@@ -78,7 +79,12 @@ fn write_parquet(df: &MlPrepDataFrame, path: &str) -> PyResult<()> {
 fn run_pipeline(path: String) -> PyResult<()> {
     let path_buf = PathBuf::from(path);
     let run_id = Uuid::new_v4();
-    runner::execution_pipeline(&path_buf, run_id)
+    // Default security config for Python usage (no restrictions for now)
+    let security_config = crate::security::SecurityConfig {
+        allowed_paths: None,
+        mask_columns: None,
+    };
+    runner::execution_pipeline(&path_buf, run_id, security_config)
         .map_err(|e| PyRuntimeError::new_err(format!("Pipeline execution failed: {}", e)))?;
     Ok(())
 }
