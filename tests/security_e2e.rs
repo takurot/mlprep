@@ -45,7 +45,8 @@ outputs: []
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("Access denied"),
-        "Should report Access denied. Actual: {}", stderr
+        "Should report Access denied. Actual: {}",
+        stderr
     );
 }
 
