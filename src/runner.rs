@@ -108,7 +108,7 @@ pub fn execution_pipeline(
         }
         // threads/cache overrides etc
     }
-    
+
     // Log active configuration
     if runtime.streaming {
         info!("Execution mode: Streaming enabled");

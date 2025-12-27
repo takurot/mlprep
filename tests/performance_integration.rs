@@ -70,7 +70,7 @@ outputs: []
             config_path.to_str().unwrap(),
             "--streaming",
             "--memory-limit",
-            "1GB"
+            "1GB",
         ])
         .env("MLPREP_LOG", "info")
         .output()

@@ -12,7 +12,10 @@ impl DataPipeline {
 
     pub fn collect(self, streaming: bool) -> MlPrepResult<DataFrame> {
         if streaming {
-            self.df.with_streaming(true).collect().map_err(MlPrepError::PolarsError)
+            self.df
+                .with_streaming(true)
+                .collect()
+                .map_err(MlPrepError::PolarsError)
         } else {
             self.df.collect().map_err(MlPrepError::PolarsError)
         }

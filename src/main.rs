@@ -116,7 +116,12 @@ fn main() -> Result<()> {
                 ..Default::default()
             };
 
-            mlprep::runner::execution_pipeline(pipeline, run_id, security_config, Some(runtime_override))?;
+            mlprep::runner::execution_pipeline(
+                pipeline,
+                run_id,
+                security_config,
+                Some(runtime_override),
+            )?;
         }
     }
 
