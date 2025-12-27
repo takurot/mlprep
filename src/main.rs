@@ -45,6 +45,14 @@ struct Cli {
     /// Columns to mask in logs
     #[arg(long, value_name = "COL", global = true)]
     mask_columns: Option<Vec<String>>,
+
+    /// Enable streaming execution mode (low memory usage)
+    #[arg(long, global = true)]
+    streaming: bool,
+
+    /// Memory limit for execution (e.g. "4GB", "500MB")
+    #[arg(long, global = true)]
+    memory_limit: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -88,7 +96,10 @@ fn main() -> Result<()> {
                 .init();
         }
         LogFormat::Text => {
-            tracing_subscriber::fmt().with_env_filter(filter).init();
+            tracing_subscriber::fmt()
+                .with_env_filter(filter)
+                .with_writer(std::io::stderr)
+                .init();
         }
     }
 
@@ -102,7 +113,18 @@ fn main() -> Result<()> {
                 allowed_paths: cli.allowed_paths,
                 mask_columns: cli.mask_columns,
             };
-            mlprep::runner::execution_pipeline(pipeline, run_id, security_config)?;
+            let runtime_override = mlprep::dsl::RuntimeConfig {
+                streaming: cli.streaming,
+                memory_limit: cli.memory_limit,
+                ..Default::default()
+            };
+
+            mlprep::runner::execution_pipeline(
+                pipeline,
+                run_id,
+                security_config,
+                Some(runtime_override),
+            )?;
         }
     }
 

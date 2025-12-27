@@ -16,6 +16,7 @@ pub fn execution_pipeline(
     path: &PathBuf,
     run_id: Uuid,
     security_config: crate::security::SecurityConfig,
+    runtime_override: Option<crate::dsl::RuntimeConfig>,
 ) -> MlPrepResult<()> {
     let mut metrics = Metrics::new();
     info!("Loading pipeline from {:?}", path);
@@ -96,11 +97,31 @@ pub fn execution_pipeline(
     metrics.record_step("build_graph", start_build.elapsed());
     pb.finish_with_message("Execution graph built.");
 
+    // Determine runtime configuration
+    let mut runtime = pipeline.runtime.clone().unwrap_or_default();
+    if let Some(override_conf) = runtime_override {
+        if override_conf.streaming {
+            runtime.streaming = true;
+        }
+        if override_conf.memory_limit.is_some() {
+            runtime.memory_limit = override_conf.memory_limit;
+        }
+        // threads/cache overrides etc
+    }
+
+    // Log active configuration
+    if runtime.streaming {
+        info!("Execution mode: Streaming enabled");
+    }
+    if let Some(limit) = &runtime.memory_limit {
+        info!("Memory limit: {}", limit);
+    }
+
     // 3. Execution & Output
     let start_exec = Instant::now();
     if pipeline.outputs.is_empty() {
         info!("No outputs specified, executing pipeline without output...");
-        let df = processed_dp.collect()?;
+        let df = processed_dp.collect(runtime.streaming)?;
         metrics.record_step("execution", start_exec.elapsed());
         metrics.rows_read = df.height(); // Approx since we executed
         metrics.rows_written = 0;
@@ -123,7 +144,7 @@ pub fn execution_pipeline(
         output_conf.path
     );
 
-    let mut final_df = processed_dp.collect()?;
+    let mut final_df = processed_dp.collect(runtime.streaming)?;
     metrics.record_step("execution", start_exec.elapsed());
     metrics.rows_written = final_df.height();
     // In lazy exec, we might not verify rows_read easily without scanning input separately

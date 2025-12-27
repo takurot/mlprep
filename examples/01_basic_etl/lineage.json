@@ -1,0 +1,14 @@
+{
+  "run_id": "e439feb2-c530-4ec8-8805-d5e827d141a9",
+  "timestamp": "2025-12-26T04:22:30.481652Z",
+  "inputs": [
+    {
+      "path": "data.csv",
+      "hash": "74469bcf87570b98646f59b150da356e8037e6e2ea8f9524b1ce6c80d951033d",
+      "size_bytes": 72
+    }
+  ],
+  "outputs": [
+    "output.parquet"
+  ]
+}

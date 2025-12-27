@@ -1,0 +1,6 @@
+inputs:
+  - path: "debug_repro/outside/input.csv"
+steps:
+  - type: select
+    columns: ["a"]
+outputs: []
