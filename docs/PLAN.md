@@ -273,7 +273,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
   * 10GBデータでのベンチマーク追加
 * **Verify**: 10GBデータを16GBメモリ環境で処理可能。
 
-### PR-17: Comprehensive Documentation `[TODO]`
+### PR-17: Comprehensive Documentation `[DONE]`
 * **Goal**: 新規ユーザーがセルフサービスで使い始められるドキュメント。
 * **Deps**: PR-12
 * **Tasks**:
