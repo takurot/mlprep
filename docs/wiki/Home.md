@@ -4,14 +4,25 @@
 
 Built with **Rust** and **Polars** for blazing-fast performance.
 
-## Documentation
+## 🚀 Quick Start
 
+- **[Quick Start Guide](quick-start.md)** - Get running in 5 minutes!
+
+## 📚 Documentation
+
+### Guides
 - [Installation](installation.md)
 - [Getting Started](getting-started.md)
+- [Migration Guide (pandas → mlprep)](migration-guide.md)
+- [Troubleshooting](troubleshooting.md)
+
+### Reference
 - [Pipeline YAML Reference](pipeline-reference.md)
+- [CLI Reference](cli-reference.md)
 - [Validation & Quarantine Mode](validation.md)
 - [Feature Engineering](feature-engineering.md)
-- [CLI Reference](cli-reference.md)
+
+### More
 - [Examples](examples.md)
 - [Performance](performance.md)
 - [Contributing](contributing.md)
