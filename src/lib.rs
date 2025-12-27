@@ -84,7 +84,7 @@ fn run_pipeline(path: String) -> PyResult<()> {
         allowed_paths: None,
         mask_columns: None,
     };
-    runner::execution_pipeline(&path_buf, run_id, security_config)
+    runner::execution_pipeline(&path_buf, run_id, security_config, None)
         .map_err(|e| PyRuntimeError::new_err(format!("Pipeline execution failed: {}", e)))?;
     Ok(())
 }

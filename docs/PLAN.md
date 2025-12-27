@@ -262,7 +262,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
   * 機密データのログマスキング（`--mask-columns`）
 * **Verify**: `cargo audit` でCritical/High脆弱性ゼロ。
 
-### PR-16: Performance Optimization `[TODO]`
+### PR-16: Performance Optimization `[DONE]`
 * **Goal**: 大規模データでの安定動作と性能保証。
 * **Deps**: PR-10
 * **Tasks**:

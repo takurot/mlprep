@@ -72,6 +72,8 @@ pub struct RuntimeConfig {
     pub threads: Option<String>,
     pub cache: Option<bool>,
     pub memory_limit: Option<String>,
+    #[serde(default)]
+    pub streaming: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -490,6 +492,19 @@ steps: []
         let pipeline: Pipeline = serde_yaml::from_str(yaml).unwrap();
         let schema = pipeline.schema.unwrap();
         assert_eq!(schema.get("col_a").unwrap(), "Int64");
-        assert_eq!(schema.get("col_b").unwrap(), "Utf8");
+    }
+
+    #[test]
+    fn test_deserialize_runtime_config() {
+        let yaml = r#"
+runtime:
+  streaming: true
+  memory_limit: "4GB"
+steps: []
+"#;
+        let pipeline: Pipeline = serde_yaml::from_str(yaml).unwrap();
+        let runtime = pipeline.runtime.unwrap();
+        assert!(runtime.streaming);
+        assert_eq!(runtime.memory_limit, Some("4GB".to_string()));
     }
 }

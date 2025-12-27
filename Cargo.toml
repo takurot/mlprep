@@ -26,7 +26,7 @@ path = "src/main.rs"
 
 [dependencies]
 pyo3 = { version = "0.23" }
-polars = { version = "0.46", features = ["lazy", "csv", "parquet", "sql"] }
+polars = { version = "0.46", features = ["lazy", "csv", "parquet", "sql", "streaming"] }
 pyo3-polars = { version = "0.20" }
 anyhow = "1.0"
 serde = { version = "1.0.228", features = ["derive"] }

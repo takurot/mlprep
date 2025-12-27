@@ -63,6 +63,44 @@ def benchmark_join(df):
     end = time.time()
     return end - start
 
+def benchmark_mlprep_cli_run(input_path, streaming=False):
+    import tempfile
+    
+    # Create simple pipeline (read -> group_by -> count)
+    # This is roughly equivalent to benchmark_groupby
+    yaml_content = f"""
+inputs:
+  - path: "{os.path.abspath(input_path)}"
+steps:
+  - type: group_by
+    by: ["group_key"]
+    aggs:
+      b:
+        func: "sum"
+        alias: "sum_b"
+outputs: []
+"""
+    # Create temp file must accept string, but NamedTemporaryFile returns bytes by default or needs mode 'w'
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as tmp:
+        tmp.write(yaml_content)
+        config_path = tmp.name
+
+    cmd = ["mlprep", "run", config_path]
+    if streaming:
+        cmd.append("--streaming")
+        
+    start = time.time()
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    end = time.time()
+    
+    os.remove(config_path)
+    
+    if result.returncode != 0:
+        raise Exception(f"CLI failed: {result.stderr}")
+        
+    return end - start
+
+
 def run_benchmarks(args):
     results = []
     
@@ -97,6 +135,23 @@ def run_benchmarks(args):
     print("Benchmarking Join (Polars)...")
     join_time = benchmark_join(lf)
     results.append({"task": "Join", "tool": "Polars (Native)", "time": join_time, "rows": rows})
+
+    # 3. CLI (Streaming vs Non-Streaming)
+    print("Benchmarking CLI Run (Standard)...")
+    try:
+        cli_time = benchmark_mlprep_cli_run(args.path, streaming=False)
+        results.append({"task": "CLI Run", "tool": "mlprep (CLI)", "time": cli_time, "rows": rows})
+    except Exception as e:
+        print(f"CLI Standard failed: {e}")
+        results.append({"task": "CLI Run", "tool": "mlprep (CLI)", "time": -1, "rows": 0, "error": str(e)})
+
+    print("Benchmarking CLI Run (Streaming)...")
+    try:
+        stream_time = benchmark_mlprep_cli_run(args.path, streaming=True)
+        results.append({"task": "CLI Run", "tool": "mlprep (Streaming)", "time": stream_time, "rows": rows})
+    except Exception as e:
+        print(f"CLI Streaming failed: {e}")
+        results.append({"task": "CLI Run", "tool": "mlprep (Streaming)", "time": -1, "rows": 0, "error": str(e)})
 
     return results
 

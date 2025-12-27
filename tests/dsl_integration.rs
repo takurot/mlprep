@@ -37,7 +37,7 @@ steps:
         pipeline,
         &mlprep::security::SecurityContext::new(Default::default()).unwrap(),
     )?;
-    let result_df = result_pipeline.collect()?;
+    let result_df = result_pipeline.collect(false)?;
 
     // 5. Verify
     // Expected: rows where value > 15.0 => [20.0, 30.0, 40.0, 50.0] corresponding to ids [2, 3, 4, 5]

@@ -28,7 +28,7 @@ steps:
             pipeline,
             &mlprep::security::SecurityContext::new(Default::default()).unwrap(),
         )?
-        .collect()?;
+        .collect(false)?;
 
     assert_eq!(result_df.height(), 5);
     let cat = result_df.column("category")?.str()?;
@@ -74,7 +74,7 @@ steps:
             pipeline,
             &mlprep::security::SecurityContext::new(Default::default()).unwrap(),
         )?
-        .collect()?
+        .collect(false)?
         .sort(["region"], Default::default())?;
 
     assert_eq!(result_df.height(), 2);
@@ -121,7 +121,7 @@ steps:
             pipeline,
             &mlprep::security::SecurityContext::new(Default::default()).unwrap(),
         )?
-        .collect()?;
+        .collect(false)?;
 
     assert_eq!(result_df.height(), 4);
     let dept_total = result_df.column("dept_total")?.i32()?;
@@ -175,7 +175,7 @@ steps:
             pipeline,
             &mlprep::security::SecurityContext::new(Default::default()).unwrap(),
         )?
-        .collect()?;
+        .collect(false)?;
 
     assert_eq!(result_df.height(), 4);
     let column_names: Vec<String> = result_df
@@ -224,7 +224,7 @@ steps:
             pipeline,
             &mlprep::security::SecurityContext::new(Default::default()).unwrap(),
         )?
-        .collect()?;
+        .collect(false)?;
 
     // After filter: removes (2024-01, A, 50) since 50 < 100
     // After groupby:
@@ -274,7 +274,7 @@ steps:
             pipeline,
             &mlprep::security::SecurityContext::new(Default::default()).unwrap(),
         )?
-        .collect()?;
+        .collect(false)?;
 
     // All rows filtered out -> empty result
     assert_eq!(result_df.height(), 0);
