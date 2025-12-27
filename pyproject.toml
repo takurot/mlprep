@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "mlprep-rust"
-version = "0.1.0"
+version = "0.3.0"
 description = "High-performance no-code data preprocessing engine"
 authors = [
     {name = "Takuro Wada", email = "public@takuro.t"},

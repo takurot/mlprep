@@ -20,7 +20,7 @@ enum LogFormat {
 
 #[derive(Parser)]
 #[command(name = "mlprep")]
-#[command(version = "0.1.0")]
+#[command(version = "0.3.0")]
 #[command(about = "High-performance no-code data preprocessing engine", long_about = None)]
 struct Cli {
     #[command(subcommand)]

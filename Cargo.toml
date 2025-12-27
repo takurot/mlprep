@@ -4,7 +4,7 @@ resolver = "2"
 
 [package]
 name = "mlprep-rust"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
 description = "High-performance no-code data preprocessing engine"
 authors = ["Takuro Wada <public@takuro.t>"]

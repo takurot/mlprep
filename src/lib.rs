@@ -92,7 +92,7 @@ fn run_pipeline(path: String) -> PyResult<()> {
 /// A Python module implemented in Rust.
 #[pymodule]
 fn mlprep(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add("__version__", "0.1.0")?;
+    m.add("__version__", "0.3.0")?;
     m.add_class::<MlPrepDataFrame>()?;
     m.add_function(wrap_pyfunction!(read_csv, m)?)?;
     m.add_function(wrap_pyfunction!(read_parquet, m)?)?;
