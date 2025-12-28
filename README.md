@@ -140,6 +140,14 @@ Explore full examples in the [`examples/`](examples/) directory:
 * **Scenario**: Track preprocessing parameters and artifacts in MLflow.
 * **Key Features**: Reproducibility and experiment management.
 
+### 6. [Airflow DAG](examples/06_airflow_dag/)
+* **Scenario**: Schedule and monitor `mlprep run` as part of an Airflow DAG.
+* **Key Features**: Production-friendly orchestration with `BashOperator`.
+
+### 7. [DVC Pipeline](examples/07_dvc_pipeline/)
+* **Scenario**: Version control processed datasets with a DVC stage that calls `mlprep`.
+* **Key Features**: Reproducible data artifacts (`dvc repro` + `mlprep run pipeline.yaml`).
+
 ---
 
 ## 🤝 Contributing

@@ -1,0 +1,24 @@
+name: dvc_mlprep_pipeline
+inputs:
+  - path: raw_data.csv
+    format: csv
+
+steps:
+  - type: cast
+    columns:
+      age: Int64
+      income: Float64
+  - type: fill_null
+    columns: [income]
+    strategy: mean
+  - type: drop_null
+    columns: [city]
+  - type: filter
+    condition: "age >= 18"
+  - type: sort
+    by: [age]
+
+outputs:
+  - path: outputs/clean_users.parquet
+    format: parquet
+    compression: zstd
