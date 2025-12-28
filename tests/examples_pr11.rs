@@ -19,8 +19,7 @@ fn dvc_example_has_required_artifacts() {
         );
     }
 
-    let dvc_yaml =
-        fs::read_to_string(base.join("dvc.yaml")).expect("dvc.yaml should be readable");
+    let dvc_yaml = fs::read_to_string(base.join("dvc.yaml")).expect("dvc.yaml should be readable");
     assert!(
         dvc_yaml.contains("mlprep run pipeline.yaml"),
         "dvc.yaml should run mlprep pipeline"
