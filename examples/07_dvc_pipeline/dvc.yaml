@@ -1,0 +1,10 @@
+stages:
+  preprocess:
+    desc: Run mlprep pipeline and track the processed dataset
+    wdir: .
+    cmd: mlprep run pipeline.yaml
+    deps:
+      - pipeline.yaml
+      - raw_data.csv
+    outs:
+      - outputs/clean_users.parquet
