@@ -75,8 +75,12 @@ fn write_parquet(df: &MlPrepDataFrame, path: &str) -> PyResult<()> {
 }
 
 /// Run a pipeline from a YAML configuration file path
-#[pyfunction]
-fn run_pipeline(path: String) -> PyResult<()> {
+#[pyfunction(signature = (path, streaming=None, memory_limit=None))]
+fn run_pipeline(
+    path: String,
+    streaming: Option<bool>,
+    memory_limit: Option<String>,
+) -> PyResult<()> {
     let path_buf = PathBuf::from(path);
     let run_id = Uuid::new_v4();
     // Default security config for Python usage (no restrictions for now)
@@ -84,7 +88,16 @@ fn run_pipeline(path: String) -> PyResult<()> {
         allowed_paths: None,
         mask_columns: None,
     };
-    runner::execution_pipeline(&path_buf, run_id, security_config, None)
+    let runtime_override = if streaming.unwrap_or(false) || memory_limit.is_some() {
+        Some(crate::dsl::RuntimeConfig {
+            streaming: streaming.unwrap_or(false),
+            memory_limit,
+            ..Default::default()
+        })
+    } else {
+        None
+    };
+    runner::execution_pipeline(&path_buf, run_id, security_config, runtime_override)
         .map_err(|e| PyRuntimeError::new_err(format!("Pipeline execution failed: {}", e)))?;
     Ok(())
 }
