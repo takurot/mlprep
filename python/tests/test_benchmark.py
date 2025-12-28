@@ -44,7 +44,7 @@ def test_build_features_pipeline_includes_state_path():
     )
 
     assert "type: features" in yaml
-    assert "state_path: \"state.json\"" in yaml
+    assert 'state_path: "state.json"' in yaml
     assert "standard_scale" in yaml
     assert "one_hot_encode" in yaml
 
