@@ -308,6 +308,18 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
   * GitHub Releasesへのバイナリアップロード
 * **Verify**: `git tag v0.2.0` で自動リリース完了。
 
+### PR-21: Streaming & Benchmark Improvements `[TODO]`
+* **Goal**: Streaming継続性とベンチマーク訴求力の向上。
+* **Deps**: PR-16
+* **Tasks**:
+  * **Lazy化**: `apply_validate` / `apply_features` での強制 `collect` を廃止し、`collect(streaming)` または Lazy Expr で組み立てることで streaming を維持。
+  * **検証/隔離の Lazy 最適化**: 違反マスク生成を Lazy で行い、predicate pushdown や列プルーニングが効く形にする。
+  * **特徴量ステップの Lazy 化**: スケーリング/エンコードを可能な範囲で Lazy Expr に寄せ、collect 回数を削減。
+  * **CLIオーバーヘッド低減**: Rustバイナリ直叩き/複数パイプライン連続実行など、起動コストの影響を抑える仕組みを検討・実装。
+  * **スレッド/メモリ設定露出**: `RuntimeConfig` の threads/cache、`POLARS_MAX_THREADS` などをCLI/ドキュメントから明示設定できるようにし、安定した計測条件を提供。
+  * **ベンチマーク拡充**: 1GB以上の `--showcase` ワークロード（検証+特徴量込み、Rows/s 表示、pandas比較）をデフォルトシナリオに追加し、`docs/BENCHMARK.md` を更新。
+* **Verify**: streaming 有効時に検証/特徴量ステップで collect が発生せず、1GBショーケースベンチで throughput 改善を確認。`docs/BENCHMARK.md` に新シナリオと結果が反映されている。
+
 ### PR-20: v1.0.0 Stable Release `[TODO]`
 * **Goal**: 本番運用可能な安定版リリース。
 * **Deps**: PR-13〜PR-19
