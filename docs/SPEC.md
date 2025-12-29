@@ -248,6 +248,7 @@
 * JSON（機械可読）
 * HTML（人間可読：Phase拡張）
 * Markdown（CI向け）
+* レポートにはサマリ、主な違反の内訳、サンプル行、推奨アクションを含める
 
 ### 3.5.5 Quarantine Lineage（Phase 2拡張）
 
@@ -343,6 +344,9 @@
 
 ### 3.8.1 基本
 
+* `mlprep init [--from data.csv]`（テンプレ生成、スキーマ推定オプション）
+* `mlprep lint pipeline.yaml`（構文/整合性チェック）
+* `mlprep plan pipeline.yaml`（dry-runでステップ概要を表示）
 * `mlprep run pipeline.yaml`
 * `mlprep profile data.csv --out report.json`
 * `mlprep validate checks.yaml data.parquet`
@@ -354,7 +358,19 @@
 * `--threads N`（自動/手動）
 * `--memory-limit`（ソフトリミット）
 * `--log json|text`
+* `--dry-run`（実行せずに検証とプラン出力のみ）
+* `--report <path>` / `--report-format md|html|json`
+* `--no-color`
 * exit code設計（0=成功、2=検証失敗、3=IO、4=OOM等）
+
+### 3.8.3 UX/Guided Workflow
+
+* `mlprep init` は対話/非対話でパイプライン雛形を生成し、`--from` でスキーマ推定と推奨チェックを提示
+* `mlprep lint` はYAMLパス付きのエラー表示と修正ヒントを返す（未知キー、型不一致、入出力不整合）
+* `mlprep plan` / `mlprep run --dry-run` はDAG/ステップ一覧、入出力スキーマ、出力先、推定行数を表示
+* 実行サマリはステップごとの処理時間、行数増減、カラム増減、quarantine件数をテーブルで表示
+* `run_summary.json`（機械可読）と `run_report.md/html`（人間可読）を出力
+* CLIは警告/エラーの色分け、セクション化された出力、`--no-color` で無彩色対応
 
 ---
 
@@ -589,4 +605,3 @@ dataset:
   * HTMLレポート
   * 高度なdrift検知、ターゲットエンコーディング（リーク防止含む）
   * 分散/リモート実行、監査連携
-
