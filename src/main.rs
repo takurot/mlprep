@@ -53,15 +53,29 @@ struct Cli {
     /// Memory limit for execution (e.g. "4GB", "500MB")
     #[arg(long, global = true)]
     memory_limit: Option<String>,
+
+    /// Maximum threads for Polars (overrides POLARS_MAX_THREADS)
+    #[arg(long, value_name = "N", global = true)]
+    threads: Option<String>,
+
+    /// Enable/disable plan cache (maps to POLARS_CACHE)
+    #[arg(
+        long,
+        value_name = "true|false",
+        num_args = 0..=1,
+        default_missing_value = "true",
+        global = true
+    )]
+    cache: Option<bool>,
 }
 
 #[derive(Subcommand)]
 enum Commands {
     /// Run a pipeline from a YAML configuration file
     Run {
-        /// Path to the pipeline YAML file
-        #[arg(value_name = "PIPELINE_FILE")]
-        pipeline: PathBuf,
+        /// One or more pipeline YAML files to execute sequentially
+        #[arg(value_name = "PIPELINE_FILE", num_args = 1..)]
+        pipelines: Vec<PathBuf>,
     },
 }
 
@@ -84,8 +98,6 @@ fn main() -> Result<()> {
         .with_env_var("MLPREP_LOG")
         .from_env_lossy();
 
-    let run_id = Uuid::new_v4();
-
     match cli.log_format {
         LogFormat::Json => {
             tracing_subscriber::fmt()
@@ -103,11 +115,12 @@ fn main() -> Result<()> {
         }
     }
 
-    // Root span with run_id
+    // Root span for the CLI session
+    let run_id = Uuid::new_v4();
     let _span = tracing::info_span!("root", run_id = %run_id).entered();
 
     match &cli.command {
-        Commands::Run { pipeline } => {
+        Commands::Run { pipelines } => {
             // miette::Result handles returning errors nicely
             let security_config = mlprep::security::SecurityConfig {
                 allowed_paths: cli.allowed_paths,
@@ -116,15 +129,19 @@ fn main() -> Result<()> {
             let runtime_override = mlprep::dsl::RuntimeConfig {
                 streaming: cli.streaming,
                 memory_limit: cli.memory_limit,
-                ..Default::default()
+                threads: cli.threads.clone(),
+                cache: cli.cache,
             };
 
-            mlprep::runner::execution_pipeline(
-                pipeline,
-                run_id,
-                security_config,
-                Some(runtime_override),
-            )?;
+            for pipeline in pipelines {
+                let pipeline_run = Uuid::new_v4();
+                mlprep::runner::execution_pipeline(
+                    pipeline,
+                    pipeline_run,
+                    security_config.clone(),
+                    Some(runtime_override.clone()),
+                )?;
+            }
         }
     }
 

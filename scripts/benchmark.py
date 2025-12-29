@@ -165,6 +165,36 @@ outputs:
 """
 
 
+def build_showcase_pipeline(input_path, output_path, state_path, streaming=True):
+    runtime = "runtime:\n  streaming: true\n" if streaming else ""
+    return f"""
+{runtime}inputs:
+  - path: "{os.path.abspath(input_path)}"
+steps:
+  - type: validate
+    checks:
+      columns:
+        - name: email
+          unique: true
+        - name: age
+          range: [0, 120]
+    mode: quarantine
+  - type: features
+    config:
+      features:
+        - column: age
+          transform: standard_scale
+        - column: income
+          transform: standard_scale
+        - column: city
+          transform: one_hot_encode
+    state_path: "{state_path}"
+outputs:
+  - path: "{output_path}"
+    format: parquet
+"""
+
+
 def benchmark_mlprep_cli_run(pipeline_yaml, streaming=False):
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as tmp:
         tmp.write(pipeline_yaml)
@@ -255,62 +285,100 @@ def run_benchmarks(args):
 def run_showcase_benchmarks(args, rows):
     results = []
 
-    print("Benchmarking Validation Pipeline (mlprep CLI)...")
+    print("Benchmarking Showcase Pipeline (validate + features, streaming)...")
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = os.path.join(tmpdir, "validation.parquet")
-            pipeline_yaml = build_validation_pipeline(args.path, output_path)
-            validation_time = benchmark_mlprep_cli_run(pipeline_yaml, streaming=False)
+            output_path = os.path.join(tmpdir, "showcase.parquet")
+            state_path = os.path.join(tmpdir, "feature_state.json")
+            pipeline_yaml = build_showcase_pipeline(
+                args.path, output_path, state_path, streaming=True
+            )
+            showcase_time = benchmark_mlprep_cli_run(pipeline_yaml, streaming=True)
         results.append(
             {
-                "task": "Pipeline (Validation)",
-                "tool": "mlprep (CLI)",
-                "time": validation_time,
+                "task": "Pipeline (Validation+Features)",
+                "tool": "mlprep (CLI streaming)",
+                "time": showcase_time,
                 "rows": rows,
-                "note": "validation + quarantine",
+                "note": "quarantine + standard/onehot",
             }
         )
     except Exception as e:
-        print(f"Validation pipeline failed: {e}")
+        print(f"Showcase pipeline failed: {e}")
         results.append(
             {
-                "task": "Pipeline (Validation)",
-                "tool": "mlprep (CLI)",
+                "task": "Pipeline (Validation+Features)",
+                "tool": "mlprep (CLI streaming)",
                 "time": -1,
                 "rows": 0,
                 "error": str(e),
-                "note": "validation + quarantine",
+                "note": "quarantine + standard/onehot",
             }
         )
 
-    print("Benchmarking Feature Pipeline (mlprep CLI)...")
+    print("Benchmarking Showcase Pipeline (non-streaming)...")
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = os.path.join(tmpdir, "features.parquet")
+            output_path = os.path.join(tmpdir, "showcase_ns.parquet")
             state_path = os.path.join(tmpdir, "feature_state.json")
-            pipeline_yaml = build_features_pipeline(args.path, output_path, state_path)
-            feature_time = benchmark_mlprep_cli_run(pipeline_yaml, streaming=False)
+            pipeline_yaml = build_showcase_pipeline(
+                args.path, output_path, state_path, streaming=False
+            )
+            showcase_time = benchmark_mlprep_cli_run(pipeline_yaml, streaming=False)
         results.append(
             {
-                "task": "Pipeline (Features)",
+                "task": "Pipeline (Validation+Features)",
                 "tool": "mlprep (CLI)",
-                "time": feature_time,
+                "time": showcase_time,
                 "rows": rows,
-                "note": "fit + one_hot_encode",
+                "note": "quarantine + standard/onehot",
             }
         )
     except Exception as e:
-        print(f"Feature pipeline failed: {e}")
+        print(f"Showcase (non-streaming) pipeline failed: {e}")
         results.append(
             {
-                "task": "Pipeline (Features)",
+                "task": "Pipeline (Validation+Features)",
                 "tool": "mlprep (CLI)",
                 "time": -1,
                 "rows": 0,
                 "error": str(e),
-                "note": "fit + one_hot_encode",
+                "note": "quarantine + standard/onehot",
             }
         )
+
+    if args.compare_pandas:
+        print("Benchmarking Pandas baseline (validate + z-score)...")
+        try:
+            import pandas as pd
+
+            start = time.time()
+            df = pd.read_csv(args.path)
+            df = df.drop_duplicates(subset=["email"])
+            df = df[(df["age"] >= 0) & (df["age"] <= 120)]
+            df["age_z"] = (df["age"] - df["age"].mean()) / df["age"].std(ddof=1)
+            pd_time = time.time() - start
+            results.append(
+                {
+                    "task": "Pipeline (Validation+Features)",
+                    "tool": "Pandas",
+                    "time": pd_time,
+                    "rows": len(df),
+                    "note": "drop dup + zscore",
+                }
+            )
+        except Exception as e:
+            print(f"Pandas baseline failed: {e}")
+            results.append(
+                {
+                    "task": "Pipeline (Validation+Features)",
+                    "tool": "Pandas",
+                    "time": -1,
+                    "rows": 0,
+                    "error": str(e),
+                    "note": "drop dup + zscore",
+                }
+            )
 
     return results
 
@@ -377,15 +445,37 @@ if __name__ == "__main__":
     parser.add_argument(
         "--schema",
         type=str,
-        default="core",
+        default="showcase",
         choices=["core", "showcase"],
     )
-    parser.add_argument(
+    showcase_group = parser.add_mutually_exclusive_group()
+    showcase_group.add_argument(
         "--showcase",
+        dest="showcase",
         action="store_true",
         help="Include validation + feature pipelines for mlprep",
+        default=True,
     )
-    parser.add_argument("--compare-pandas", action="store_true")
+    showcase_group.add_argument(
+        "--no-showcase",
+        dest="showcase",
+        action="store_false",
+        help="Skip showcase workloads",
+    )
+    pandas_group = parser.add_mutually_exclusive_group()
+    pandas_group.add_argument(
+        "--compare-pandas",
+        dest="compare_pandas",
+        action="store_true",
+        default=True,
+        help="Include Pandas baseline runs",
+    )
+    pandas_group.add_argument(
+        "--no-compare-pandas",
+        dest="compare_pandas",
+        action="store_false",
+        help="Skip Pandas baseline runs",
+    )
     args = parser.parse_args()
 
     if args.showcase and args.schema == "core" and (args.generate or not os.path.exists(args.path)):

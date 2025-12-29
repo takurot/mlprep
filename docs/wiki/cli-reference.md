@@ -15,14 +15,14 @@ mlprep [OPTIONS] <COMMAND>
 Run a data processing pipeline from a YAML configuration file.
 
 ```bash
-mlprep run <PIPELINE_FILE> [OPTIONS]
+mlprep run <PIPELINE_FILE>... [OPTIONS]
 ```
 
 #### Arguments
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `PIPELINE_FILE` | Yes | Path to the pipeline YAML file |
+| `PIPELINE_FILE` | Yes | One or more pipeline YAML files to execute sequentially |
 
 #### Options
 
@@ -35,6 +35,8 @@ mlprep run <PIPELINE_FILE> [OPTIONS]
 | `--mask-columns` | | Columns to mask in log output | none |
 | `--streaming` | | Enable streaming mode (low memory) | off |
 | `--memory-limit` | | Set memory limit (e.g., `4GB`, `500MB`) | none |
+| `--threads` | | Override `POLARS_MAX_THREADS` | env default |
+| `--cache` | | Toggle Polars plan cache (`POLARS_CACHE`) | none |
 
 #### Examples
 
@@ -62,6 +64,9 @@ mlprep run pipeline.yaml --streaming
 
 # With memory limit
 mlprep run pipeline.yaml --memory-limit 8GB
+
+# Multi-run in one process (reduces CLI startup overhead)
+mlprep run pipeline.yaml pipeline_eval.yaml --threads 8 --streaming
 
 # Combined options
 mlprep run pipeline.yaml --verbose --streaming --memory-limit 4GB

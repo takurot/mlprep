@@ -33,8 +33,10 @@ steps:
 
     // 4. Execute
     let data_pipeline = DataPipeline::new(lf);
+    let runtime = mlprep::dsl::RuntimeConfig::default();
     let result_pipeline = data_pipeline.apply_transforms(
         pipeline,
+        &runtime,
         &mlprep::security::SecurityContext::new(Default::default()).unwrap(),
     )?;
     let result_df = result_pipeline.collect(false)?;

@@ -66,3 +66,15 @@ def test_render_showcase_markdown_includes_rows_per_sec():
     assert "| Task | Tool | Time (s) | Rows | Rows/s | Highlights |" in markdown
     assert "validation + quarantine" in markdown
     assert "50.00" in markdown
+
+
+def test_build_showcase_pipeline_combines_steps():
+    """Showcase pipeline should include validation, features, and runtime block."""
+    yaml = benchmark.build_showcase_pipeline(
+        "input.csv", "output.parquet", "state.json", streaming=True
+    )
+
+    assert "type: validate" in yaml
+    assert "type: features" in yaml
+    assert "runtime:" in yaml
+    assert "streaming: true" in yaml

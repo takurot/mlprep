@@ -28,9 +28,10 @@ impl DataPipeline {
     pub fn apply_transforms(
         self,
         pipeline: crate::dsl::Pipeline,
+        runtime: &crate::dsl::RuntimeConfig,
         security_context: &crate::security::SecurityContext,
     ) -> MlPrepResult<Self> {
-        let new_lf = crate::compute::apply_pipeline(self.df, pipeline, security_context)?;
+        let new_lf = crate::compute::apply_pipeline(self.df, pipeline, runtime, security_context)?;
         Ok(Self { df: new_lf })
     }
 }

@@ -55,6 +55,179 @@ impl Default for ValidationReport {
     }
 }
 
+fn check_label(check: &ColumnCheck) -> String {
+    format!("{}:{}", check.name, check_label_suffix(check))
+}
+
+fn check_label_suffix(check: &ColumnCheck) -> &'static str {
+    if check.not_null {
+        "not_null"
+    } else if check.unique {
+        "unique"
+    } else if check.range.is_some() {
+        "range"
+    } else if check.regex.is_some() {
+        "regex"
+    } else if check.allowed_values.is_some() {
+        "enum"
+    } else {
+        "unknown"
+    }
+}
+
+/// Build a violation expression for a single column check.
+/// The expression evaluates to `true` for rows that violate the check.
+pub fn build_violation_expr(check: &ColumnCheck) -> Result<Expr> {
+    let mut parts: Vec<Expr> = Vec::new();
+
+    if check.not_null {
+        parts.push(col(&check.name).is_null());
+    }
+
+    if check.unique {
+        let dup_mask = col(&check.name)
+            .count()
+            .over([col(&check.name)])
+            .gt(lit(1u32));
+        parts.push(dup_mask);
+    }
+
+    if let Some((min, max)) = check.range {
+        let col_expr = col(&check.name).cast(DataType::Float64);
+        parts.push(col_expr.clone().lt(lit(min)).or(col_expr.gt(lit(max))));
+    }
+
+    if let Some(ref pattern) = check.regex {
+        // Validate regex upfront for early erroring
+        regex::Regex::new(pattern)?;
+        let regex_miss = col(&check.name)
+            .cast(DataType::String)
+            .str()
+            .contains(lit(pattern.clone()), false)
+            .not()
+            .fill_null(false);
+        parts.push(regex_miss);
+    }
+
+    if let Some(ref allowed) = check.allowed_values {
+        let series = Series::new("allowed".into(), allowed.clone());
+        let not_allowed = col(&check.name)
+            .cast(DataType::String)
+            .is_in(lit(series))
+            .not()
+            .fill_null(false);
+        parts.push(not_allowed);
+    }
+
+    if parts.is_empty() {
+        // No-op check, never matches violations
+        return Ok(lit(false));
+    }
+
+    let mut iter = parts.into_iter();
+    let first = iter
+        .next()
+        .ok_or_else(|| anyhow!("Empty validation expression"))?;
+    Ok(iter.fold(first, |acc, expr| acc.or(expr)))
+}
+
+/// Build a combined violation mask for all column checks.
+/// Returns None when there are no checks to evaluate.
+pub fn violation_mask_expr(config: &CheckConfig) -> Result<Option<Expr>> {
+    let mut exprs = Vec::new();
+    for check in &config.columns {
+        exprs.push(build_violation_expr(check)?);
+    }
+
+    if exprs.is_empty() {
+        return Ok(None);
+    }
+
+    let mut iter = exprs.into_iter();
+    let first = iter.next().unwrap_or_else(|| lit(false));
+    Ok(Some(iter.fold(first, |acc, expr| acc.or(expr))))
+}
+
+fn violation_from_count(check: &ColumnCheck, count: usize) -> Option<Violation> {
+    if count == 0 {
+        return None;
+    }
+
+    let message = if check.not_null {
+        format!("Column '{}' has {} null values", check.name, count)
+    } else if check.unique {
+        format!("Column '{}' has {} duplicate values", check.name, count)
+    } else if let Some((min, max)) = check.range {
+        format!(
+            "Column '{}' has {} values outside range [{}, {}]",
+            check.name, count, min, max
+        )
+    } else if let Some(ref pattern) = check.regex {
+        format!(
+            "Column '{}' has {} values not matching pattern '{}'",
+            check.name, count, pattern
+        )
+    } else if let Some(ref allowed) = check.allowed_values {
+        format!(
+            "Column '{}' has {} values not in allowed set {:?}",
+            check.name, count, allowed
+        )
+    } else {
+        format!("Column '{}' failed validation {} times", check.name, count)
+    };
+
+    Some(Violation {
+        column: check.name.clone(),
+        check_type: check_label_suffix(check).to_string(),
+        message,
+        count,
+    })
+}
+
+/// Summarize violations lazily by aggregating violation counts per check.
+pub fn summarize_violations_lazy(
+    lf: LazyFrame,
+    config: &CheckConfig,
+    streaming: bool,
+) -> Result<ValidationReport> {
+    let mut agg_exprs: Vec<Expr> = Vec::new();
+    for (idx, check) in config.columns.iter().enumerate() {
+        let mask_expr = build_violation_expr(check)?;
+        let alias = format!("check{}_{}", idx, check_label(check));
+        agg_exprs.push(mask_expr.cast(DataType::UInt64).sum().alias(&alias));
+    }
+
+    if agg_exprs.is_empty() {
+        return Ok(ValidationReport::new());
+    }
+
+    let counts_df = lf
+        .with_streaming(streaming)
+        .select(agg_exprs)
+        .collect()
+        .map_err(|e| anyhow!("Failed to collect validation summary: {}", e))?;
+
+    let mut report = ValidationReport::new();
+    for (idx, check) in config.columns.iter().enumerate() {
+        let col_name = format!("check{}_{}", idx, check_label(check));
+        let count = counts_df
+            .column(&col_name)
+            .ok()
+            .and_then(|c| c.u64().ok())
+            .and_then(|ca| ca.get(0))
+            .unwrap_or(0) as usize;
+
+        let violation = violation_from_count(check, count);
+        let passed = violation.is_none();
+        report.add_result(ValidationResult {
+            passed,
+            violations: violation.into_iter().collect(),
+        });
+    }
+
+    Ok(report)
+}
+
 /// Validate that a column has no null values
 pub fn validate_not_null(df: &DataFrame, column: &str) -> Result<ValidationResult> {
     let col = df
