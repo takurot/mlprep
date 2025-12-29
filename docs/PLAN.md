@@ -285,9 +285,22 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
   * **Video/GIF**: 30秒デモ動画
 * **Verify**: 初見ユーザーがドキュメントのみで基本パイプラインを構築できること。
 
+### PR-22: CLI UX & Guided Workflow `[TODO]`
+* **Goal**: 初見ユーザーでも迷わずパイプライン作成・実行・検証できる体験を提供。
+* **Deps**: PR-13, PR-17
+* **Tasks**:
+  * `mlprep init` ウィザード（テンプレ生成/対話型、`--from data.csv`でスキーマ推定）
+  * `mlprep lint pipeline.yaml`（構文/スキーマ/入出力パス整合性/未使用ステップの検証）
+  * `mlprep plan pipeline.yaml` / `mlprep run --dry-run`（ステップ一覧・入出力スキーマ・出力先の可視化）
+  * 実行サマリ出力（ステップごとの処理時間、行数増減、quarantine件数）
+  * レポート出力：`run_report.md/html` と `run_summary.json`
+  * CLI表現の改善（カラー、セクション化、`--no-color`、ヒント表示）
+  * シェル補完（`mlprep completions`）
+* **Verify**: `mlprep init` でテンプレ生成、`mlprep plan` で概要表示、`mlprep run --report` でサマリ/レポートが出力される。
+
 ### PR-18: Beta Testing Program `[TODO]`
 * **Goal**: 実ユーザーからのフィードバック収集。
-* **Deps**: PR-17
+* **Deps**: PR-17, PR-22
 * **Tasks**:
   * ベータテスター募集（3〜5名）
   * フィードバック収集テンプレート作成
@@ -323,7 +336,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
 
 ### PR-20: v1.0.0 Stable Release `[TODO]`
 * **Goal**: 本番運用可能な安定版リリース。
-* **Deps**: PR-13〜PR-19
+* **Deps**: PR-13〜PR-19, PR-22
 * **Tasks**:
   * 全PRのマージ確認
   * CHANGELOG.md 最終更新
@@ -343,9 +356,11 @@ graph TD
     PR12 --> PR17[PR-17: Documentation]
     PR10[PR-10: Optimize] --> PR16[PR-16: Performance]
     PR13 --> PR14[PR-14: Logging]
-    PR17 --> PR18[PR-18: Beta Testing]
+    PR13 --> PR22[PR-22: UX & Guided CLI]
+    PR17 --> PR22
+    PR17 & PR22 --> PR18[PR-18: Beta Testing]
     PR16 --> PR19[PR-19: CI/CD]
-    PR13 & PR14 & PR15 & PR16 & PR17 & PR18 & PR19 --> PR20[PR-20: v1.0.0]
+    PR13 & PR14 & PR15 & PR16 & PR17 & PR18 & PR19 & PR22 --> PR20[PR-20: v1.0.0]
 ```
 
 ---
