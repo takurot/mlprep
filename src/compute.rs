@@ -276,8 +276,8 @@ fn apply_validate(
     runtime: &RuntimeConfig,
     security_context: &crate::security::SecurityContext,
 ) -> MlPrepResult<LazyFrame> {
-    use crate::validate::{summarize_violations_lazy, violation_mask_expr};
     use crate::dsl::ValidationMode;
+    use crate::validate::{summarize_violations_lazy, violation_mask_expr};
 
     let _ = security_context;
 

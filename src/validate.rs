@@ -156,10 +156,7 @@ fn violation_from_count(check: &ColumnCheck, count: usize) -> Option<Violation> 
     let message = if check.not_null {
         format!("Column '{}' has {} null values", check.name, count)
     } else if check.unique {
-        format!(
-            "Column '{}' has {} duplicate values",
-            check.name, count
-        )
+        format!("Column '{}' has {} duplicate values", check.name, count)
     } else if let Some((min, max)) = check.range {
         format!(
             "Column '{}' has {} values outside range [{}, {}]",

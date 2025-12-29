@@ -25,10 +25,7 @@ fn apply_runtime_env(runtime: &crate::dsl::RuntimeConfig) {
             env::set_var("POLARS_MAX_THREADS", threads);
             match previous {
                 Some(prev) if prev != *threads => {
-                    info!(
-                        "Overriding POLARS_MAX_THREADS from {} to {}",
-                        prev, threads
-                    );
+                    info!("Overriding POLARS_MAX_THREADS from {} to {}", prev, threads);
                 }
                 None => info!("Setting POLARS_MAX_THREADS={}", threads),
                 _ => {}
@@ -38,10 +35,7 @@ fn apply_runtime_env(runtime: &crate::dsl::RuntimeConfig) {
 
     if let Some(cache) = runtime.cache {
         env::set_var("POLARS_CACHE", if cache { "1" } else { "0" });
-        info!(
-            "Plan cache {}",
-            if cache { "enabled" } else { "disabled" }
-        );
+        info!("Plan cache {}", if cache { "enabled" } else { "disabled" });
     }
 }
 

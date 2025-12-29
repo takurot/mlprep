@@ -4,8 +4,8 @@
 //! Supports scaling (MinMax, Standard) and encoding (OneHot, Count).
 
 use anyhow::{anyhow, Result};
-use polars::prelude::*;
 use polars::prelude::UniqueKeepStrategy;
+use polars::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
@@ -509,7 +509,10 @@ pub fn fit_features_lazy(
         match spec.transform {
             FeatureTransform::MinMaxScale => {
                 let stats_df = numeric_stats.as_ref().ok_or_else(|| {
-                    anyhow!("Numeric stats unavailable for MinMax transform on {}", spec.column)
+                    anyhow!(
+                        "Numeric stats unavailable for MinMax transform on {}",
+                        spec.column
+                    )
                 })?;
                 let min_col = format!("{}__min", spec.column);
                 let max_col = format!("{}__max", spec.column);
@@ -556,9 +559,7 @@ pub fn fit_features_lazy(
                 let vocab_df = lf
                     .clone()
                     .with_streaming(streaming)
-                    .select([col(&spec.column)
-                        .cast(DataType::String)
-                        .alias("value")])
+                    .select([col(&spec.column).cast(DataType::String).alias("value")])
                     .unique(None, UniqueKeepStrategy::First)
                     .collect()
                     .map_err(|e| anyhow!("Failed to collect one-hot vocab: {}", e))?;
@@ -580,9 +581,7 @@ pub fn fit_features_lazy(
                 let counts_df = lf
                     .clone()
                     .with_streaming(streaming)
-                    .select([col(&spec.column)
-                        .cast(DataType::String)
-                        .alias("value")])
+                    .select([col(&spec.column).cast(DataType::String).alias("value")])
                     .group_by([col("value")])
                     .agg([col("value").count().alias("count")])
                     .collect()
@@ -593,7 +592,8 @@ pub fn fit_features_lazy(
 
                 let mut counts = HashMap::new();
                 let mut total: u64 = 0;
-                for (value_opt, count_opt) in values_series.into_iter().zip(counts_series.into_iter())
+                for (value_opt, count_opt) in
+                    values_series.into_iter().zip(counts_series.into_iter())
                 {
                     if let Some(count) = count_opt {
                         total += count as u64;
@@ -615,10 +615,7 @@ pub fn fit_features_lazy(
 }
 
 /// Build lazy expressions for a feature transform using fitted state.
-pub fn exprs_from_state(
-    spec: &FeatureSpec,
-    entry: &FeatureStateEntry,
-) -> Result<Vec<Expr>> {
+pub fn exprs_from_state(spec: &FeatureSpec, entry: &FeatureStateEntry) -> Result<Vec<Expr>> {
     match (spec.transform.clone(), entry) {
         (FeatureTransform::MinMaxScale, FeatureStateEntry::MinMax { stats, .. }) => {
             let base = col(&spec.column).cast(DataType::Float64);
