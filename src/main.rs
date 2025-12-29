@@ -131,7 +131,6 @@ fn main() -> Result<()> {
                 memory_limit: cli.memory_limit,
                 threads: cli.threads.clone(),
                 cache: cli.cache,
-                ..Default::default()
             };
 
             for pipeline in pipelines {
