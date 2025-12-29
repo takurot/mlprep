@@ -23,9 +23,11 @@ steps:
 
     let pipeline: Pipeline = serde_yaml::from_str(yaml)?;
     let data_pipeline = DataPipeline::new(lf);
+    let runtime = mlprep::dsl::RuntimeConfig::default();
     let result_df = data_pipeline
         .apply_transforms(
             pipeline,
+            &runtime,
             &mlprep::security::SecurityContext::new(Default::default()).unwrap(),
         )?
         .collect(false)?;
@@ -69,9 +71,11 @@ steps:
 
     let pipeline: Pipeline = serde_yaml::from_str(yaml)?;
     let data_pipeline = DataPipeline::new(lf);
+    let runtime = mlprep::dsl::RuntimeConfig::default();
     let result_df = data_pipeline
         .apply_transforms(
             pipeline,
+            &runtime,
             &mlprep::security::SecurityContext::new(Default::default()).unwrap(),
         )?
         .collect(false)?
@@ -116,9 +120,11 @@ steps:
 
     let pipeline: Pipeline = serde_yaml::from_str(yaml)?;
     let data_pipeline = DataPipeline::new(lf);
+    let runtime = mlprep::dsl::RuntimeConfig::default();
     let result_df = data_pipeline
         .apply_transforms(
             pipeline,
+            &runtime,
             &mlprep::security::SecurityContext::new(Default::default()).unwrap(),
         )?
         .collect(false)?;
@@ -170,9 +176,11 @@ steps:
 
     let pipeline: Pipeline = serde_yaml::from_str(&yaml)?;
     let data_pipeline = DataPipeline::new(lf);
+    let runtime = mlprep::dsl::RuntimeConfig::default();
     let result_df = data_pipeline
         .apply_transforms(
             pipeline,
+            &runtime,
             &mlprep::security::SecurityContext::new(Default::default()).unwrap(),
         )?
         .collect(false)?;
@@ -219,9 +227,11 @@ steps:
 
     let pipeline: Pipeline = serde_yaml::from_str(yaml)?;
     let data_pipeline = DataPipeline::new(lf);
+    let runtime = mlprep::dsl::RuntimeConfig::default();
     let result_df = data_pipeline
         .apply_transforms(
             pipeline,
+            &runtime,
             &mlprep::security::SecurityContext::new(Default::default()).unwrap(),
         )?
         .collect(false)?;
@@ -269,9 +279,11 @@ steps:
 
     let pipeline: Pipeline = serde_yaml::from_str(yaml)?;
     let data_pipeline = DataPipeline::new(lf);
+    let runtime = mlprep::dsl::RuntimeConfig::default();
     let result_df = data_pipeline
         .apply_transforms(
             pipeline,
+            &runtime,
             &mlprep::security::SecurityContext::new(Default::default()).unwrap(),
         )?
         .collect(false)?;

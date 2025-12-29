@@ -5,6 +5,7 @@
 
 use anyhow::{anyhow, Result};
 use polars::prelude::*;
+use polars::prelude::UniqueKeepStrategy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
@@ -446,6 +447,239 @@ pub fn transform_features(
     }
 
     Ok(result)
+}
+
+/// Fit feature statistics lazily using a `LazyFrame`.
+pub fn fit_features_lazy(
+    lf: LazyFrame,
+    config: &FeatureConfig,
+    streaming: bool,
+) -> Result<FeatureState> {
+    let mut state = FeatureState::new();
+
+    // Collect numeric stats together to minimize scans.
+    let mut numeric_exprs = Vec::new();
+    for spec in &config.features {
+        match spec.transform {
+            FeatureTransform::MinMaxScale => {
+                numeric_exprs.push(
+                    col(&spec.column)
+                        .cast(DataType::Float64)
+                        .min()
+                        .alias(format!("{}__min", spec.column)),
+                );
+                numeric_exprs.push(
+                    col(&spec.column)
+                        .cast(DataType::Float64)
+                        .max()
+                        .alias(format!("{}__max", spec.column)),
+                );
+            }
+            FeatureTransform::StandardScale => {
+                numeric_exprs.push(
+                    col(&spec.column)
+                        .cast(DataType::Float64)
+                        .mean()
+                        .alias(format!("{}__mean", spec.column)),
+                );
+                numeric_exprs.push(
+                    col(&spec.column)
+                        .cast(DataType::Float64)
+                        .std(1)
+                        .alias(format!("{}__std", spec.column)),
+                );
+            }
+            _ => {}
+        }
+    }
+
+    let numeric_stats = if numeric_exprs.is_empty() {
+        None
+    } else {
+        Some(
+            lf.clone()
+                .with_streaming(streaming)
+                .select(numeric_exprs)
+                .collect()
+                .map_err(|e| anyhow!("Failed to collect numeric feature stats: {}", e))?,
+        )
+    };
+
+    for spec in &config.features {
+        match spec.transform {
+            FeatureTransform::MinMaxScale => {
+                let stats_df = numeric_stats.as_ref().ok_or_else(|| {
+                    anyhow!("Numeric stats unavailable for MinMax transform on {}", spec.column)
+                })?;
+                let min_col = format!("{}__min", spec.column);
+                let max_col = format!("{}__max", spec.column);
+                let min = stats_df
+                    .column(&min_col)?
+                    .f64()?
+                    .get(0)
+                    .ok_or_else(|| anyhow!("Missing min value for {}", spec.column))?;
+                let max = stats_df
+                    .column(&max_col)?
+                    .f64()?
+                    .get(0)
+                    .ok_or_else(|| anyhow!("Missing max value for {}", spec.column))?;
+                state.add_entry(FeatureStateEntry::MinMax {
+                    column: spec.column.clone(),
+                    stats: MinMaxStats { min, max },
+                });
+            }
+            FeatureTransform::StandardScale => {
+                let stats_df = numeric_stats.as_ref().ok_or_else(|| {
+                    anyhow!(
+                        "Numeric stats unavailable for Standard transform on {}",
+                        spec.column
+                    )
+                })?;
+                let mean_col = format!("{}__mean", spec.column);
+                let std_col = format!("{}__std", spec.column);
+                let mean = stats_df
+                    .column(&mean_col)?
+                    .f64()?
+                    .get(0)
+                    .ok_or_else(|| anyhow!("Missing mean value for {}", spec.column))?;
+                let std = stats_df
+                    .column(&std_col)?
+                    .f64()?
+                    .get(0)
+                    .ok_or_else(|| anyhow!("Missing std value for {}", spec.column))?;
+                state.add_entry(FeatureStateEntry::Standard {
+                    column: spec.column.clone(),
+                    stats: StandardStats { mean, std },
+                });
+            }
+            FeatureTransform::OneHotEncode => {
+                let vocab_df = lf
+                    .clone()
+                    .with_streaming(streaming)
+                    .select([col(&spec.column)
+                        .cast(DataType::String)
+                        .alias("value")])
+                    .unique(None, UniqueKeepStrategy::First)
+                    .collect()
+                    .map_err(|e| anyhow!("Failed to collect one-hot vocab: {}", e))?;
+
+                let categories = vocab_df
+                    .column("value")?
+                    .str()?
+                    .into_iter()
+                    .flatten()
+                    .map(|s| s.to_string())
+                    .collect();
+
+                state.add_entry(FeatureStateEntry::OneHot {
+                    column: spec.column.clone(),
+                    vocab: OneHotVocab { categories },
+                });
+            }
+            FeatureTransform::CountEncode => {
+                let counts_df = lf
+                    .clone()
+                    .with_streaming(streaming)
+                    .select([col(&spec.column)
+                        .cast(DataType::String)
+                        .alias("value")])
+                    .group_by([col("value")])
+                    .agg([col("value").count().alias("count")])
+                    .collect()
+                    .map_err(|e| anyhow!("Failed to collect count stats: {}", e))?;
+
+                let counts_series = counts_df.column("count")?.u32()?;
+                let values_series = counts_df.column("value")?.str()?;
+
+                let mut counts = HashMap::new();
+                let mut total: u64 = 0;
+                for (value_opt, count_opt) in values_series.into_iter().zip(counts_series.into_iter())
+                {
+                    if let Some(count) = count_opt {
+                        total += count as u64;
+                        if let Some(value) = value_opt {
+                            counts.insert(value.to_string(), count as u64);
+                        }
+                    }
+                }
+
+                state.add_entry(FeatureStateEntry::Count {
+                    column: spec.column.clone(),
+                    stats: CountStats { counts, total },
+                });
+            }
+        }
+    }
+
+    Ok(state)
+}
+
+/// Build lazy expressions for a feature transform using fitted state.
+pub fn exprs_from_state(
+    spec: &FeatureSpec,
+    entry: &FeatureStateEntry,
+) -> Result<Vec<Expr>> {
+    match (spec.transform.clone(), entry) {
+        (FeatureTransform::MinMaxScale, FeatureStateEntry::MinMax { stats, .. }) => {
+            let base = col(&spec.column).cast(DataType::Float64);
+            let range = stats.max - stats.min;
+            let scaled = if range.abs() < f64::EPSILON {
+                lit(0.5)
+            } else {
+                (base - lit(stats.min)) / lit(range)
+            };
+            let name = spec.alias.as_deref().unwrap_or(&spec.column);
+            Ok(vec![scaled.alias(name)])
+        }
+        (FeatureTransform::StandardScale, FeatureStateEntry::Standard { stats, .. }) => {
+            let base = col(&spec.column).cast(DataType::Float64);
+            let scaled = if stats.std.abs() < f64::EPSILON {
+                lit(0.0)
+            } else {
+                (base - lit(stats.mean)) / lit(stats.std)
+            };
+            let name = spec.alias.as_deref().unwrap_or(&spec.column);
+            Ok(vec![scaled.alias(name)])
+        }
+        (FeatureTransform::OneHotEncode, FeatureStateEntry::OneHot { vocab, .. }) => {
+            let mut exprs = Vec::new();
+            let base = col(&spec.column).cast(DataType::String);
+            for category in &vocab.categories {
+                let col_name = format!(
+                    "{}_{}",
+                    spec.alias.as_deref().unwrap_or(&spec.column),
+                    category
+                );
+                let expr = when(base.clone().eq(lit(category.as_str())))
+                    .then(lit(1i32))
+                    .otherwise(lit(0i32))
+                    .alias(col_name);
+                exprs.push(expr);
+            }
+            Ok(exprs)
+        }
+        (FeatureTransform::CountEncode, FeatureStateEntry::Count { stats, .. }) => {
+            let output_name = spec.alias.clone().unwrap_or_else(|| spec.column.clone());
+            let base = col(&spec.column).cast(DataType::String);
+            let mut expr = lit(0.0);
+            for (value, count) in &stats.counts {
+                let freq = if stats.total == 0 {
+                    0.0
+                } else {
+                    *count as f64 / stats.total as f64
+                };
+                expr = when(base.clone().eq(lit(value.as_str())))
+                    .then(lit(freq))
+                    .otherwise(expr);
+            }
+            Ok(vec![expr.alias(output_name)])
+        }
+        _ => Err(anyhow!(
+            "State {:?} does not match requested transform {:?}",
+            entry,
+            spec.transform
+        )),
+    }
 }
 
 #[cfg(test)]

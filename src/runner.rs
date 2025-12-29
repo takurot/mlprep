@@ -7,10 +7,43 @@ use chrono::Utc;
 use indicatif::{ProgressBar, ProgressStyle};
 use polars::prelude::*;
 use serde::de::Error;
+use std::env;
 use std::path::PathBuf;
 use std::time::Instant;
-use tracing::info;
+use tracing::{info, warn};
 use uuid::Uuid;
+
+fn apply_runtime_env(runtime: &crate::dsl::RuntimeConfig) {
+    if let Some(ref threads) = runtime.threads {
+        if threads.parse::<usize>().is_err() {
+            warn!(
+                "Invalid threads value '{}'; skipping POLARS_MAX_THREADS override",
+                threads
+            );
+        } else {
+            let previous = env::var("POLARS_MAX_THREADS").ok();
+            env::set_var("POLARS_MAX_THREADS", threads);
+            match previous {
+                Some(prev) if prev != *threads => {
+                    info!(
+                        "Overriding POLARS_MAX_THREADS from {} to {}",
+                        prev, threads
+                    );
+                }
+                None => info!("Setting POLARS_MAX_THREADS={}", threads),
+                _ => {}
+            }
+        }
+    }
+
+    if let Some(cache) = runtime.cache {
+        env::set_var("POLARS_CACHE", if cache { "1" } else { "0" });
+        info!(
+            "Plan cache {}",
+            if cache { "enabled" } else { "disabled" }
+        );
+    }
+}
 
 pub fn execution_pipeline(
     path: &PathBuf,
@@ -38,6 +71,24 @@ pub fn execution_pipeline(
     })?;
 
     let pipeline = Pipeline::from_path(path)?;
+
+    // Determine runtime configuration (pipeline config + CLI overrides)
+    let mut runtime = pipeline.runtime.clone().unwrap_or_default();
+    if let Some(override_conf) = runtime_override {
+        if override_conf.streaming {
+            runtime.streaming = true;
+        }
+        if override_conf.memory_limit.is_some() {
+            runtime.memory_limit = override_conf.memory_limit;
+        }
+        if override_conf.threads.is_some() {
+            runtime.threads = override_conf.threads;
+        }
+        if override_conf.cache.is_some() {
+            runtime.cache = override_conf.cache;
+        }
+    }
+    apply_runtime_env(&runtime);
 
     // 1. Inputs
     if pipeline.inputs.is_empty() {
@@ -93,25 +144,19 @@ pub fn execution_pipeline(
 
     pb.set_message("Building execution graph...");
     let start_build = Instant::now();
-    let processed_dp = dp.apply_transforms(pipeline.clone(), &security_context)?;
+    let processed_dp = dp.apply_transforms(pipeline.clone(), &runtime, &security_context)?;
     metrics.record_step("build_graph", start_build.elapsed());
     pb.finish_with_message("Execution graph built.");
-
-    // Determine runtime configuration
-    let mut runtime = pipeline.runtime.clone().unwrap_or_default();
-    if let Some(override_conf) = runtime_override {
-        if override_conf.streaming {
-            runtime.streaming = true;
-        }
-        if override_conf.memory_limit.is_some() {
-            runtime.memory_limit = override_conf.memory_limit;
-        }
-        // threads/cache overrides etc
-    }
 
     // Log active configuration
     if runtime.streaming {
         info!("Execution mode: Streaming enabled");
+    }
+    if let Some(ref threads) = runtime.threads {
+        info!("Thread limit: {}", threads);
+    }
+    if let Some(cache) = runtime.cache {
+        info!("Plan cache: {}", if cache { "on" } else { "off" });
     }
     if let Some(limit) = &runtime.memory_limit {
         info!("Memory limit: {}", limit);
@@ -182,11 +227,16 @@ pub fn execution_pipeline(
     };
 
     // Write lineage.json
-    let lineage_file = std::fs::File::create("lineage.json").map_err(MlPrepError::IoError)?;
+    let lineage_filename = format!("lineage_{}.json", run_id);
+    let lineage_path = path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."))
+        .join(lineage_filename);
+    let lineage_file = std::fs::File::create(&lineage_path).map_err(MlPrepError::IoError)?;
     serde_json::to_writer_pretty(lineage_file, &lineage)
         .map_err(|e| MlPrepError::Unknown(e.into()))?;
 
-    info!("Lineage written to lineage.json");
+    info!("Lineage written to {}", lineage_path.display());
     if let Ok(m_json) = serde_json::to_string(&metrics) {
         info!("Metrics: {}", m_json);
     }

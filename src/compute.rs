@@ -1,4 +1,6 @@
-use crate::dsl::{Agg, Features, GroupBy, Join, Pipeline, Sort, Step, Validate, Window, WindowOp};
+use crate::dsl::{
+    Agg, Features, GroupBy, Join, Pipeline, RuntimeConfig, Sort, Step, Validate, Window, WindowOp,
+};
 use crate::errors::{MlPrepError, MlPrepResult};
 use crate::features;
 use crate::io;
@@ -9,6 +11,7 @@ use std::collections::HashMap;
 pub fn apply_pipeline(
     lf: LazyFrame,
     pipeline: Pipeline,
+    runtime: &RuntimeConfig,
     security_context: &crate::security::SecurityContext,
 ) -> MlPrepResult<LazyFrame> {
     let mut current_lf = lf;
@@ -28,8 +31,8 @@ pub fn apply_pipeline(
             Step::Window(w) => apply_window(current_lf, w)?,
             Step::FillNull(f) => apply_fill_null(current_lf, f)?,
             Step::DropNull(d) => apply_drop_null(current_lf, d)?,
-            Step::Validate(v) => apply_validate(current_lf, v, security_context)?,
-            Step::Features(f) => apply_features(current_lf, f)?,
+            Step::Validate(v) => apply_validate(current_lf, v, runtime, security_context)?,
+            Step::Features(f) => apply_features(current_lf, f, runtime)?,
         };
     }
 
@@ -270,25 +273,24 @@ fn apply_drop_null(lf: LazyFrame, drop_null: crate::dsl::DropNull) -> MlPrepResu
 fn apply_validate(
     lf: LazyFrame,
     validate: Validate,
+    runtime: &RuntimeConfig,
     security_context: &crate::security::SecurityContext,
 ) -> MlPrepResult<LazyFrame> {
-    use crate::validate::run_validation;
+    use crate::validate::{summarize_violations_lazy, violation_mask_expr};
+    use crate::dsl::ValidationMode;
 
-    // Collect the LazyFrame to run validation
-    let df = lf.collect().map_err(|e| {
-        MlPrepError::TransformError(format!("Failed to collect DataFrame for validation: {}", e))
-    })?;
+    let _ = security_context;
 
-    // Run validation
-    let (valid_df, _quarantine, report) = run_validation(
-        df,
-        &validate.checks,
-        &validate.mode,
-        security_context.masker(),
-    )
-    .map_err(|e| MlPrepError::ValidationError(format!("Validation execution failed: {}", e)))?;
+    // Validation relies on expression masks so we can stay in Lazy mode.
+    let Some(mask_expr) = violation_mask_expr(&validate.checks)
+        .map_err(|e| MlPrepError::ValidationError(e.to_string()))?
+    else {
+        return Ok(lf);
+    };
 
-    // Log violations if any
+    let report = summarize_violations_lazy(lf.clone(), &validate.checks, runtime.streaming)
+        .map_err(|e| MlPrepError::ValidationError(format!("Validation execution failed: {}", e)))?;
+
     if !report.passed {
         for result in &report.results {
             for violation in &result.violations {
@@ -300,8 +302,20 @@ fn apply_validate(
         }
     }
 
-    // Return the valid data as LazyFrame
-    Ok(valid_df.lazy())
+    match validate.mode {
+        ValidationMode::Strict => {
+            if !report.passed {
+                Err(MlPrepError::ValidationError(format!(
+                    "Validation failed with {} violations",
+                    report.total_violations
+                )))
+            } else {
+                Ok(lf)
+            }
+        }
+        ValidationMode::Warn => Ok(lf),
+        ValidationMode::Quarantine => Ok(lf.filter(mask_expr.not())),
+    }
 }
 
 fn apply_schema(lf: LazyFrame, schema: HashMap<String, String>) -> MlPrepResult<LazyFrame> {
@@ -310,39 +324,55 @@ fn apply_schema(lf: LazyFrame, schema: HashMap<String, String>) -> MlPrepResult<
     apply_cast(lf, cast_step)
 }
 
-fn apply_features(lf: LazyFrame, features_step: Features) -> MlPrepResult<LazyFrame> {
-    // Collect the LazyFrame to run feature engineering
-    let df = lf.collect().map_err(|e| {
-        MlPrepError::TransformError(format!("Failed to collect DataFrame for features: {}", e))
-    })?;
-
-    // Check if state should be loaded or computed
+fn apply_features(
+    lf: LazyFrame,
+    features_step: Features,
+    runtime: &RuntimeConfig,
+) -> MlPrepResult<LazyFrame> {
+    // Determine feature state (load existing or fit lazily).
     let state = if let Some(ref path) = features_step.state_path {
-        // Try to load existing state
         if std::path::Path::new(path).exists() {
             features::FeatureState::load(path).map_err(|e| {
                 MlPrepError::FeatureError(format!("Failed to load feature state: {}", e))
             })?
         } else {
-            // Fit and save state
-            let new_state = features::fit_features(&df, &features_step.config)
-                .map_err(|e| MlPrepError::FeatureError(format!("Failed to fit features: {}", e)))?;
+            let new_state = features::fit_features_lazy(
+                lf.clone(),
+                &features_step.config,
+                runtime.streaming,
+            )
+            .map_err(|e| MlPrepError::FeatureError(format!("Failed to fit features: {}", e)))?;
             new_state.save(path).map_err(|e| {
                 MlPrepError::FeatureError(format!("Failed to save feature state: {}", e))
             })?;
             new_state
         }
     } else {
-        // No path specified, just fit (won't persist)
-        features::fit_features(&df, &features_step.config)
+        features::fit_features_lazy(lf.clone(), &features_step.config, runtime.streaming)
             .map_err(|e| MlPrepError::FeatureError(format!("Failed to fit features: {}", e)))?
     };
 
-    // Transform the data
-    let result = features::transform_features(&df, &features_step.config, &state)
-        .map_err(|e| MlPrepError::FeatureError(format!("Failed to transform features: {}", e)))?;
+    // Build lazy expressions for each feature transform using the fitted state.
+    let mut exprs: Vec<Expr> = Vec::new();
+    for spec in &features_step.config.features {
+        let entry = state
+            .get_entry(&spec.column, &spec.transform)
+            .ok_or_else(|| {
+                MlPrepError::FeatureError(format!(
+                    "Missing fitted state for column '{}' ({:?})",
+                    spec.column, spec.transform
+                ))
+            })?;
+        let mut built = features::exprs_from_state(spec, entry).map_err(|e| {
+            MlPrepError::FeatureError(format!(
+                "Failed to build feature transform for '{}': {}",
+                spec.column, e
+            ))
+        })?;
+        exprs.append(&mut built);
+    }
 
-    Ok(result.lazy())
+    Ok(lf.with_columns(exprs))
 }
 
 #[cfg(test)]
@@ -375,9 +405,11 @@ mod tests {
             runtime: None,
             schema: None,
         };
+        let runtime = crate::dsl::RuntimeConfig::default();
         let result = apply_pipeline(
             lf,
             pipeline,
+            &runtime,
             &crate::security::SecurityContext::new(Default::default()).unwrap(),
         )
         .unwrap()
@@ -407,9 +439,11 @@ mod tests {
             runtime: None,
             schema: None,
         };
+        let runtime = crate::dsl::RuntimeConfig::default();
         let result = apply_pipeline(
             lf,
             pipeline,
+            &runtime,
             &crate::security::SecurityContext::new(Default::default()).unwrap(),
         )
         .unwrap()
@@ -441,9 +475,11 @@ mod tests {
             runtime: None,
             schema: None,
         };
+        let runtime = crate::dsl::RuntimeConfig::default();
         let result = apply_pipeline(
             lf,
             pipeline,
+            &runtime,
             &crate::security::SecurityContext::new(Default::default()).unwrap(),
         )
         .unwrap()
@@ -474,9 +510,11 @@ mod tests {
             runtime: None,
             schema: None,
         };
+        let runtime = crate::dsl::RuntimeConfig::default();
         let result = apply_pipeline(
             lf,
             pipeline,
+            &runtime,
             &crate::security::SecurityContext::new(Default::default()).unwrap(),
         )
         .unwrap()
@@ -510,9 +548,11 @@ mod tests {
             runtime: None,
             schema: None,
         };
+        let runtime = crate::dsl::RuntimeConfig::default();
         let result = apply_pipeline(
             lf,
             pipeline,
+            &runtime,
             &crate::security::SecurityContext::new(Default::default()).unwrap(),
         )
         .unwrap()
@@ -546,9 +586,11 @@ mod tests {
             runtime: None,
             schema: None,
         };
+        let runtime = crate::dsl::RuntimeConfig::default();
         let result = apply_pipeline(
             lf,
             pipeline,
+            &runtime,
             &crate::security::SecurityContext::new(Default::default()).unwrap(),
         )
         .unwrap()
@@ -593,9 +635,11 @@ mod tests {
             runtime: None,
             schema: None,
         };
+        let runtime = crate::dsl::RuntimeConfig::default();
         let result = apply_pipeline(
             lf,
             pipeline,
+            &runtime,
             &crate::security::SecurityContext::new(Default::default()).unwrap(),
         )
         .unwrap()
@@ -646,9 +690,11 @@ mod tests {
             runtime: None,
             schema: None,
         };
+        let runtime = crate::dsl::RuntimeConfig::default();
         let result = apply_pipeline(
             lf,
             pipeline,
+            &runtime,
             &crate::security::SecurityContext::new(Default::default()).unwrap(),
         )
         .unwrap()
@@ -688,9 +734,11 @@ mod tests {
             runtime: None,
             schema: None,
         };
+        let runtime = crate::dsl::RuntimeConfig::default();
         let result = apply_pipeline(
             lf,
             pipeline,
+            &runtime,
             &crate::security::SecurityContext::new(Default::default()).unwrap(),
         )
         .unwrap()
@@ -732,9 +780,11 @@ mod tests {
             runtime: None,
             schema: None,
         };
+        let runtime = crate::dsl::RuntimeConfig::default();
         let result = apply_pipeline(
             lf,
             pipeline,
+            &runtime,
             &crate::security::SecurityContext::new(Default::default()).unwrap(),
         )
         .unwrap()
@@ -768,9 +818,11 @@ mod tests {
             runtime: None,
             schema: None,
         };
+        let runtime = crate::dsl::RuntimeConfig::default();
         let result = apply_pipeline(
             lf,
             pipeline,
+            &runtime,
             &crate::security::SecurityContext::new(Default::default()).unwrap(),
         )
         .unwrap()
@@ -812,9 +864,11 @@ mod tests {
             runtime: None,
             schema: None,
         };
+        let runtime = crate::dsl::RuntimeConfig::default();
         let result = apply_pipeline(
             lf,
             pipeline,
+            &runtime,
             &crate::security::SecurityContext::new(Default::default()).unwrap(),
         )
         .unwrap()
@@ -846,9 +900,11 @@ mod tests {
             runtime: None,
             schema: None,
         };
+        let runtime = crate::dsl::RuntimeConfig::default();
         let result = apply_pipeline(
             lf,
             pipeline,
+            &runtime,
             &crate::security::SecurityContext::new(Default::default()).unwrap(),
         )
         .unwrap()

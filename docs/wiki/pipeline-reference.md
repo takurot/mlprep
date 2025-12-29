@@ -280,12 +280,16 @@ Optional runtime settings:
 ```yaml
 runtime:
   streaming: true
+  threads: "8"
+  cache: true
   memory_limit: "4GB"
 ```
 
 | Option | Description | Default |
 |--------|-------------|---------|
 | `streaming` | Enable streaming mode | `false` |
+| `threads` | Override `POLARS_MAX_THREADS` | env default |
+| `cache` | Enable Polars plan cache (`POLARS_CACHE`) | none |
 | `memory_limit` | Memory limit (e.g., "4GB") | none |
 
 > **Note:** Runtime options can be overridden via CLI flags.
