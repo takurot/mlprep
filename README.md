@@ -8,6 +8,12 @@
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://pypi.org/project/mlprep/)
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange)](https://www.rust-lang.org/)
 
+## 🎬 Introduction Video
+
+[![mlprep Introduction](https://img.youtube.com/vi/1eMmGOun6T4/0.jpg)](https://www.youtube.com/watch?v=1eMmGOun6T4)
+
+> 📺 **Watch**: [mlprep Introduction (NotebookLM)](https://www.youtube.com/watch?v=1eMmGOun6T4)
+
 ---
 
 **Stop writing slow, fragile pandas boilerplate.**  
