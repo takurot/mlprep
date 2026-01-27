@@ -10,6 +10,8 @@
 htmlcov
 
 # Data files
+/data/
+examples/lineage_*.json
 bench_data.csv
 *.parquet
 test.csv

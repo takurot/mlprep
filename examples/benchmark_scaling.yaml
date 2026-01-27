@@ -1,0 +1,30 @@
+inputs:
+  - path: "data/benchmark_scaling.csv"
+    format: csv
+
+steps:
+  - type: validate
+    checks:
+      columns:
+        - name: "email"
+          regex: "@"
+    mode: warn
+  - type: features
+    config:
+      features:
+        - column: "col_a"
+          transform: min_max_scale
+        - column: "col_b"
+          transform: standard_scale
+        - column: "col_c"
+          transform: min_max_scale
+        - column: "col_d"
+          transform: standard_scale
+        - column: "category"
+          alias: "cat"
+          transform: one_hot_encode
+    state_path: "data/benchmark_state.json"
+
+outputs:
+  - path: "data/benchmark_scaling_out.parquet"
+    format: parquet
