@@ -424,7 +424,7 @@
 
 * **AVX-512 / NEON 活用**:
   * カスタムカーネル（validation、scaling、encoding）のベクトル化
-  * `packed_simd` または `std::simd`（nightly）の活用検討
+  * `std::arch` (stable) を基本とし、必要に応じて nightly 最適化を検討
   * Polars自体のSIMD最適化に加え、mlprep独自処理の高速化
 * **対象処理**:
   * Regex validation（短パターンのSIMD化）
@@ -443,7 +443,7 @@
 #### 3.9.4.4 メモリマップド I/O
 
 * **memmap2 活用**:
-  * 大規模CSV/Parquetのゼロコピー読み込み
+  * 大規模CSV/Parquetの読み込みバッファ削減とI/O経路の最適化
   * OSのページキャッシュ活用
 * **効果**:
   * コールドスタート時間の短縮
@@ -467,7 +467,7 @@
 
 #### 3.9.4.7 辞書圧縮最適化
 
-* **高カーディナリティ列の自動辞書化**:
+* **低・中カーディナリティ列の自動辞書化**:
   * String列のカーディナリティ分析
   * 閾値以下の場合、自動的にCategorical型に変換
 * **効果**:

@@ -358,7 +358,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
   * `polars-gpu` または cuDF 連携の調査・評価
   * RuntimeConfig に `gpu: bool` オプション追加
   * CLI に `--gpu` フラグ追加
-  * GPU 対応操作: GroupBy、Join、Window 関数
+  * GPU 対応操作: GroupBy、Join、Window 関数、数値フィルタリング
   * GPU 未検出時の CPU フォールバック実装
   * CUDA エラーハンドリング
   * ベンチマーク追加（GPU vs CPU 比較）
@@ -368,7 +368,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
 * **Goal**: カスタム処理のベクトル化による高速化。
 * **Deps**: PR-16
 * **Tasks**:
-  * `packed_simd` または `std::arch` による SIMD カーネル実装
+  * `std::arch` (stable) による SIMD カーネル実装（nightly はオプション）
   * 対象処理: Regex validation（短パターン）、MinMax/Standard scaling、OneHot lookup
   * AVX-512 / NEON の条件付きコンパイル
   * ベンチマークによる効果測定
@@ -419,6 +419,16 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
   * チャンクサイズの自動調整（コア数 × 2）
 * **Verify**: 10M 行以上のデータで fit 処理が 3x 以上高速化。結果がシリアル処理と一致。
 
+### PR-29: Dictionary Compression Optimization `[TODO]`
+* **Goal**: 低〜中カーディナリティ列のメモリ圧縮と処理高速化。
+* **Deps**: PR-16
+* **Tasks**:
+  * 文字列列のカーディナリティ推定 (HyperLogLog等)
+  * 閾値判定と自動 Categorical 化 (polars cast)
+  * CLI オプション `--auto-dict` / `runtime.auto_dict_threshold`
+  * 辞書化された列に対する高速 GroupBy/Filter ベンチマーク
+* **Verify**: カーディナリティ 10% 以下の文字列列でメモリ 50% 削減、GroupBy 2x 高速化。
+
 ---
 
 ## Phase 3 Dependency Graph
@@ -431,6 +441,7 @@ graph TD
     PR16 --> PR26[PR-26: Memory-Mapped I/O]
     PR14[PR-14: Logging] --> PR27[PR-27: Query Plan Caching]
     PR08[PR-08: Feature Eng] --> PR28[PR-28: Chunk Parallel Features]
+    PR16 --> PR29[PR-29: Dict Optimization]
     PR16 --> PR28
 ```
 
@@ -438,13 +449,14 @@ graph TD
 
 ## Phase 3 Completion Criteria
 
-- [ ] PR-23〜PR-28 merged
+- [ ] PR-23〜PR-29 merged
 - [ ] GPU ベンチマーク: GroupBy 5x+
 - [ ] SIMD ベンチマーク: scaling 2x+
 - [ ] 複数ファイル I/O: 30%+ 短縮
 - [ ] メモリ使用量: 30%+ 削減
 - [ ] プランキャッシュ: 2回目以降 50%+ 短縮
 - [ ] 並列特徴量: fit 3x+
+- [ ] 辞書圧縮: メモリ 50%+ 削減
 
 ---
 
