@@ -347,6 +347,107 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
 
 ---
 
+## Phase 3: Advanced Performance
+
+高度なパフォーマンス最適化により、さらなる高速化と大規模データ対応を実現。
+
+### PR-23: GPU Acceleration via polars-gpu `[TODO]`
+* **Goal**: NVIDIA GPU を活用した大規模データ処理の高速化。
+* **Deps**: PR-20
+* **Tasks**:
+  * `polars-gpu` または cuDF 連携の調査・評価
+  * RuntimeConfig に `gpu: bool` オプション追加
+  * CLI に `--gpu` フラグ追加
+  * GPU 対応操作: GroupBy、Join、Window 関数
+  * GPU 未検出時の CPU フォールバック実装
+  * CUDA エラーハンドリング
+  * ベンチマーク追加（GPU vs CPU 比較）
+* **Verify**: 1GB データで GroupBy が GPU 有効時に 5x 以上高速化。GPU 未検出環境で正常動作。
+
+### PR-24: SIMD Optimization for Custom Kernels `[TODO]`
+* **Goal**: カスタム処理のベクトル化による高速化。
+* **Deps**: PR-16
+* **Tasks**:
+  * `packed_simd` または `std::arch` による SIMD カーネル実装
+  * 対象処理: Regex validation（短パターン）、MinMax/Standard scaling、OneHot lookup
+  * AVX-512 / NEON の条件付きコンパイル
+  * ベンチマークによる効果測定
+  * フィーチャーフラグ（`simd`）でのオプトイン
+* **Verify**: scaling 処理で 2x 以上の高速化。各アーキテクチャでのビルド確認。
+
+### PR-25: Async I/O and Pipeline Parallelism `[TODO]`
+* **Goal**: I/O とCPU 処理のオーバーラップによる全体スループット向上。
+* **Deps**: PR-16
+* **Tasks**:
+  * `tokio` 依存追加（optional feature）
+  * 複数入力ファイルの並列読み込み実装
+  * 読み込み → 変換 → 書き込みのパイプライン並列化
+  * チャンク単位のストリーミング強化
+  * 同期/非同期モードの切り替え設定
+* **Verify**: 複数ファイル入力で処理時間が 30%+ 短縮。単一ファイルケースで性能退行なし。
+
+### PR-26: Memory-Mapped File I/O `[TODO]`
+* **Goal**: ゼロコピー読み込みによるコールドスタート時間とメモリ使用量の削減。
+* **Deps**: PR-16
+* **Tasks**:
+  * `memmap2` 依存追加
+  * CSV/Parquet 読み込みの mmap 対応
+  * OS ページキャッシュ活用
+  * メモリ使用量の計測・比較
+  * フィーチャーフラグ（`mmap`）でのオプトイン
+* **Verify**: 初回読み込みが 20%+ 高速化。メモリ使用量が 30%+ 削減。
+
+### PR-27: Query Plan Caching `[TODO]`
+* **Goal**: 同一パイプラインの再実行時の最適化オーバーヘッド削減。
+* **Deps**: PR-14
+* **Tasks**:
+  * パイプライン + スキーマのハッシュ計算
+  * 最適化済みプランの保存・読み込み（`.mlprep_cache/plans/`）
+  * キャッシュ有効期限とインバリデーション戦略
+  * `--no-plan-cache` オプション
+  * キャッシュヒット率の計測・ログ出力
+* **Verify**: 同一パイプラインの 2 回目以降の実行が 50%+ 高速化。キャッシュ破棄で正常動作。
+
+### PR-28: Chunk-Level Parallel Feature Engineering `[TODO]`
+* **Goal**: 特徴量 fit/transform の並列処理によるCPU利用率向上。
+* **Deps**: PR-08, PR-16
+* **Tasks**:
+  * DataFrame を論理チャンクに分割
+  * チャンク並列での統計量計算（min/max/mean/std）
+  * 統計量のマージ処理（分散計算）
+  * Rayon ベースの並列化
+  * チャンクサイズの自動調整（コア数 × 2）
+* **Verify**: 10M 行以上のデータで fit 処理が 3x 以上高速化。結果がシリアル処理と一致。
+
+---
+
+## Phase 3 Dependency Graph
+
+```mermaid
+graph TD
+    PR20[PR-20: v1.0.0] --> PR23[PR-23: GPU Acceleration]
+    PR16[PR-16: Performance] --> PR24[PR-24: SIMD Optimization]
+    PR16 --> PR25[PR-25: Async I/O]
+    PR16 --> PR26[PR-26: Memory-Mapped I/O]
+    PR14[PR-14: Logging] --> PR27[PR-27: Query Plan Caching]
+    PR08[PR-08: Feature Eng] --> PR28[PR-28: Chunk Parallel Features]
+    PR16 --> PR28
+```
+
+---
+
+## Phase 3 Completion Criteria
+
+- [ ] PR-23〜PR-28 merged
+- [ ] GPU ベンチマーク: GroupBy 5x+
+- [ ] SIMD ベンチマーク: scaling 2x+
+- [ ] 複数ファイル I/O: 30%+ 短縮
+- [ ] メモリ使用量: 30%+ 削減
+- [ ] プランキャッシュ: 2回目以降 50%+ 短縮
+- [ ] 並列特徴量: fit 3x+
+
+---
+
 ## Phase 2 Dependency Graph
 
 ```mermaid
