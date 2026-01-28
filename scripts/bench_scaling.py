@@ -13,6 +13,14 @@ def build(features):
     
     subprocess.run(cmd, check=True, capture_output=True)
 
+def setup():
+    # Check if data exists
+    if not os.path.exists("examples/bench_scaling/data.parquet"):
+        print("Test data not found. Generating...")
+        subprocess.run([sys.executable, "examples/bench_scaling/generate_data.py"], check=True)
+    else:
+        print("Test data exists.")
+
 def run_pipeline():
     cmd = ["target/release/mlprep", "run", "examples/bench_scaling/pipeline.yaml"]
     start = time.time()
@@ -21,6 +29,7 @@ def run_pipeline():
     return end - start
 
 def main():
+    setup()
     # 1. Base (No SIMD)
     build("none")
     # Run once to warm up FS cache?

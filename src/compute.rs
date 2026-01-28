@@ -354,20 +354,22 @@ fn apply_features(
 
     #[cfg(feature = "simd")]
     {
-        // PR-30: Direct SIMD application to avoid Expr::map overhead
-        // We only do this if streaming is NOT enabled, as we need to materialize the DataFrame
-        // to operate on Series directly.
+        // PR-30: Use map_batches to integrate SIMD transform into Lazy plan.
+        // This avoids eager collect() while still materializing the DataFrame for the SIMD kernel
+        // at execution time.
         if !runtime.streaming {
-            let df = lf.collect().map_err(|e| {
-                MlPrepError::FeatureError(format!("Failed to collect for SIMD transform: {}", e))
-            })?;
-
-            let result_df =
-                features::transform_features_direct(&df, &features_step.config, &state).map_err(
-                    |e| MlPrepError::FeatureError(format!("Direct feature transform failed: {}", e)),
-                )?;
-
-            return Ok(result_df.lazy());
+            let config = features_step.config.clone();
+            let state_clone = state.clone();
+            
+            return Ok(lf.map(
+                move |df| {
+                    features::transform_features_batched(&df, &config, &state_clone)
+                        .map_err(|e| PolarsError::ComputeError(format!("Direct feature transform failed: {}", e).into()))
+                },
+                OptFlags::default(),
+                None,
+                None,
+            ));
         }
     }
 
