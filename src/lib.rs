@@ -7,6 +7,7 @@ pub mod io;
 pub mod observability;
 pub mod runner;
 pub mod security;
+pub mod simd;
 pub mod validate;
 
 use polars::prelude::*;

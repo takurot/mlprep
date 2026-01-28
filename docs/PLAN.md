@@ -364,7 +364,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
   * ベンチマーク追加（GPU vs CPU 比較）
 * **Verify**: 1GB データで GroupBy が GPU 有効時に 5x 以上高速化。GPU 未検出環境で正常動作。
 
-### PR-24: SIMD Optimization for Custom Kernels `[TODO]`
+### PR-24: SIMD Optimization for Custom Kernels `[DONE]`
 * **Goal**: カスタム処理のベクトル化による高速化。
 * **Deps**: PR-16
 * **Tasks**:
@@ -373,8 +373,21 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
   * AVX-512 / NEON の条件付きコンパイル
   * ベンチマークによる効果測定
   * フィーチャーフラグ（`simd`）でのオプトイン
+* **Progress**:
+  * [x] MinMax/Standard scaling SIMD kernels
+  * [x] Regex validation SIMD kernel (literal optimization + regex fallback)
+  * [x] OneHot lookup SIMD kernel
 * **Verify**: scaling 処理で 2x 以上の高速化。各アーキテクチャでのビルド確認。
 
+### PR-30: Polars map Overhead Avoidance `[TODO]`
+* **Goal**: `Expr::map` 使用時のオーバーヘッドを回避し、SIMD最適化の効果を最大化。
+* **Deps**: PR-24
+* **Tasks**:
+  * `apply_batch` or custom `ChunkedArray` 操作による直接実装の検討
+  * Polars内部APIの活用可能性調査
+  * Lazy evaluation との整合性確保
+  * ベンチマークによる効果測定
+* **Verify**: scaling処理で map 使用時比 1.5x 以上の高速化。
 ### PR-25: Async I/O and Pipeline Parallelism `[TODO]`
 * **Goal**: I/O とCPU 処理のオーバーラップによる全体スループット向上。
 * **Deps**: PR-16

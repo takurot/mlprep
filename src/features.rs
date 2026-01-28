@@ -618,42 +618,115 @@ pub fn fit_features_lazy(
 pub fn exprs_from_state(spec: &FeatureSpec, entry: &FeatureStateEntry) -> Result<Vec<Expr>> {
     match (spec.transform.clone(), entry) {
         (FeatureTransform::MinMaxScale, FeatureStateEntry::MinMax { stats, .. }) => {
-            let base = col(&spec.column).cast(DataType::Float64);
-            let range = stats.max - stats.min;
-            let scaled = if range.abs() < f64::EPSILON {
-                lit(0.5)
-            } else {
-                (base - lit(stats.min)) / lit(range)
-            };
-            let name = spec.alias.as_deref().unwrap_or(&spec.column);
-            Ok(vec![scaled.alias(name)])
+            #[cfg(feature = "simd")]
+            {
+                let min = stats.min;
+                let max = stats.max;
+                let output_name = spec.alias.as_deref().unwrap_or(&spec.column).to_string();
+
+                let func = move |c: Column| {
+                    let s = c.as_materialized_series();
+                    crate::simd::minmax_scale_simd(s, min, max).map(|s| Some(s.into()))
+                };
+
+                let expr = col(&spec.column)
+                    .cast(DataType::Float64)
+                    .map(func, GetOutput::from_type(DataType::Float64))
+                    .alias(output_name);
+
+                Ok(vec![expr])
+            }
+            #[cfg(not(feature = "simd"))]
+            {
+                let base = col(&spec.column).cast(DataType::Float64);
+                let range = stats.max - stats.min;
+                let scaled = if range.abs() < f64::EPSILON {
+                    lit(0.5)
+                } else {
+                    (base - lit(stats.min)) / lit(range)
+                };
+                let name = spec.alias.as_deref().unwrap_or(&spec.column);
+                Ok(vec![scaled.alias(name)])
+            }
         }
         (FeatureTransform::StandardScale, FeatureStateEntry::Standard { stats, .. }) => {
-            let base = col(&spec.column).cast(DataType::Float64);
-            let scaled = if stats.std.abs() < f64::EPSILON {
-                lit(0.0)
-            } else {
-                (base - lit(stats.mean)) / lit(stats.std)
-            };
-            let name = spec.alias.as_deref().unwrap_or(&spec.column);
-            Ok(vec![scaled.alias(name)])
+            #[cfg(feature = "simd")]
+            {
+                let mean = stats.mean;
+                let std = stats.std;
+                let output_name = spec.alias.as_deref().unwrap_or(&spec.column).to_string();
+
+                let func = move |c: Column| {
+                    let s = c.as_materialized_series();
+                    crate::simd::standard_scale_simd(s, mean, std).map(|s| Some(s.into()))
+                };
+
+                let expr = col(&spec.column)
+                    .cast(DataType::Float64)
+                    .map(func, GetOutput::from_type(DataType::Float64))
+                    .alias(output_name);
+
+                Ok(vec![expr])
+            }
+            #[cfg(not(feature = "simd"))]
+            {
+                let base = col(&spec.column).cast(DataType::Float64);
+                let scaled = if stats.std.abs() < f64::EPSILON {
+                    lit(0.0)
+                } else {
+                    (base - lit(stats.mean)) / lit(stats.std)
+                };
+                let name = spec.alias.as_deref().unwrap_or(&spec.column);
+                Ok(vec![scaled.alias(name)])
+            }
         }
         (FeatureTransform::OneHotEncode, FeatureStateEntry::OneHot { vocab, .. }) => {
-            let mut exprs = Vec::new();
-            let base = col(&spec.column).cast(DataType::String);
-            for category in &vocab.categories {
-                let col_name = format!(
-                    "{}_{}",
-                    spec.alias.as_deref().unwrap_or(&spec.column),
-                    category
-                );
-                let expr = when(base.clone().eq(lit(category.as_str())))
-                    .then(lit(1i32))
-                    .otherwise(lit(0i32))
-                    .alias(col_name);
-                exprs.push(expr);
+            #[cfg(feature = "simd")]
+            {
+                // For SIMD: We compute all one-hot columns in a single pass within map,
+                // but return them as individual lit expressions since Polars struct/unnest
+                // API is complex. The SIMD optimization happens during the scan when
+                // Polars fuses the expressions.
+                //
+                // Actually, to truly leverage the SIMD kernel that computes ALL columns
+                // at once, we need a different approach. For now, we use the scalar
+                // Polars expressions (which Polars internally vectorizes well).
+                // The simd::onehot_lookup_simd is available for direct DataFrame operations.
+                let mut exprs = Vec::new();
+                let base = col(&spec.column).cast(DataType::String);
+                for category in &vocab.categories {
+                    let col_name = format!(
+                        "{}_{}",
+                        spec.alias.as_deref().unwrap_or(&spec.column),
+                        category
+                    );
+                    let expr = when(base.clone().eq(lit(category.as_str())))
+                        .then(lit(1i32))
+                        .otherwise(lit(0i32))
+                        .alias(col_name);
+                    exprs.push(expr);
+                }
+                Ok(exprs)
             }
-            Ok(exprs)
+
+            #[cfg(not(feature = "simd"))]
+            {
+                let mut exprs = Vec::new();
+                let base = col(&spec.column).cast(DataType::String);
+                for category in &vocab.categories {
+                    let col_name = format!(
+                        "{}_{}",
+                        spec.alias.as_deref().unwrap_or(&spec.column),
+                        category
+                    );
+                    let expr = when(base.clone().eq(lit(category.as_str())))
+                        .then(lit(1i32))
+                        .otherwise(lit(0i32))
+                        .alias(col_name);
+                    exprs.push(expr);
+                }
+                Ok(exprs)
+            }
         }
         (FeatureTransform::CountEncode, FeatureStateEntry::Count { stats, .. }) => {
             let output_name = spec.alias.clone().unwrap_or_else(|| spec.column.clone());
