@@ -11,7 +11,8 @@ htmlcov
 
 # Data files
 /data/
-examples/lineage_*.json
+examples/**/lineage_*.json
+examples/**/*.parquet
 bench_data.csv
 *.parquet
 test.csv

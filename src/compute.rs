@@ -352,6 +352,25 @@ fn apply_features(
             .map_err(|e| MlPrepError::FeatureError(format!("Failed to fit features: {}", e)))?
     };
 
+    #[cfg(feature = "simd")]
+    {
+        // PR-30: Direct SIMD application to avoid Expr::map overhead
+        // We only do this if streaming is NOT enabled, as we need to materialize the DataFrame
+        // to operate on Series directly.
+        if !runtime.streaming {
+            let df = lf.collect().map_err(|e| {
+                MlPrepError::FeatureError(format!("Failed to collect for SIMD transform: {}", e))
+            })?;
+
+            let result_df =
+                features::transform_features_direct(&df, &features_step.config, &state).map_err(
+                    |e| MlPrepError::FeatureError(format!("Direct feature transform failed: {}", e)),
+                )?;
+
+            return Ok(result_df.lazy());
+        }
+    }
+
     // Build lazy expressions for each feature transform using the fitted state.
     let mut exprs: Vec<Expr> = Vec::new();
     for spec in &features_step.config.features {

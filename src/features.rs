@@ -417,33 +417,138 @@ pub fn transform_features(
     config: &FeatureConfig,
     state: &FeatureState,
 ) -> Result<DataFrame> {
-    let mut result = df.clone();
+    #[cfg(feature = "simd")]
+    {
+        transform_features_direct(df, config, state)
+    }
 
+    #[cfg(not(feature = "simd"))]
+    {
+        let mut result = df.clone();
+
+        for spec in &config.features {
+            let entry = state
+                .get_entry(&spec.column, &spec.transform)
+                .ok_or_else(|| {
+                    anyhow!(
+                        "No fitted state for column '{}' with transform {:?}",
+                        spec.column,
+                        spec.transform
+                    )
+                })?;
+
+            result = match entry {
+                FeatureStateEntry::MinMax { stats, .. } => {
+                    transform_minmax(&result, &spec.column, stats, spec.alias.as_deref())?
+                }
+                FeatureStateEntry::Standard { stats, .. } => {
+                    transform_standard(&result, &spec.column, stats, spec.alias.as_deref())?
+                }
+                FeatureStateEntry::OneHot { vocab, .. } => {
+                    transform_onehot(&result, &spec.column, vocab, spec.alias.as_deref())?
+                }
+                FeatureStateEntry::Count { stats, .. } => {
+                    transform_count(&result, &spec.column, stats, spec.alias.as_deref())?
+                }
+            };
+        }
+
+        Ok(result)
+    }
+}
+
+#[cfg(feature = "simd")]
+pub fn transform_features_direct(
+    df: &DataFrame,
+    config: &FeatureConfig,
+    state: &FeatureState,
+) -> Result<DataFrame> {
+    use rayon::prelude::*;
+
+    // Validate state presence first
     for spec in &config.features {
-        let entry = state
+        if state
             .get_entry(&spec.column, &spec.transform)
-            .ok_or_else(|| {
-                anyhow!(
-                    "No fitted state for column '{}' with transform {:?}",
-                    spec.column,
-                    spec.transform
-                )
-            })?;
+            .is_none()
+        {
+            return Err(anyhow!(
+                "No fitted state for column '{}' with transform {:?}",
+                spec.column,
+                spec.transform
+            ));
+        }
+    }
 
-        result = match entry {
-            FeatureStateEntry::MinMax { stats, .. } => {
-                transform_minmax(&result, &spec.column, stats, spec.alias.as_deref())?
+    // Process columns in parallel
+    let new_columns_results: Vec<Result<Vec<Series>>> = config
+        .features
+        .par_iter()
+        .map(|spec| {
+            let entry = state
+                .get_entry(&spec.column, &spec.transform)
+                .unwrap(); // We checked this above
+
+            // Get source column from DF (read-only access is thread-safe)
+            let col = df
+                .column(&spec.column)
+                .map_err(|e| anyhow!("Column not found: {}", e))?;
+
+            match (spec.transform.clone(), entry) {
+                (FeatureTransform::MinMaxScale, FeatureStateEntry::MinMax { stats, .. }) => {
+                    let col_f64 = col.cast(&DataType::Float64)?;
+                    // Convert Column to Series for SIMD kernel
+                    let s_f64 = col_f64.as_materialized_series();
+                    let transformed = crate::simd::minmax_scale_simd(s_f64, stats.min, stats.max)
+                         .map_err(|e| anyhow!("SIMD MinMax failed: {}", e))?;
+                    
+                    let output_name = spec.alias.as_deref().unwrap_or(&spec.column);
+                    let mut out = transformed;
+                    out.rename(output_name.into());
+                    Ok(vec![out])
+                }
+                (FeatureTransform::StandardScale, FeatureStateEntry::Standard { stats, .. }) => {
+                    let col_f64 = col.cast(&DataType::Float64)?;
+                    let s_f64 = col_f64.as_materialized_series();
+                    let transformed = crate::simd::standard_scale_simd(s_f64, stats.mean, stats.std)
+                         .map_err(|e| anyhow!("SIMD Standard failed: {}", e))?;
+                    
+                    let output_name = spec.alias.as_deref().unwrap_or(&spec.column);
+                    let mut out = transformed;
+                    out.rename(output_name.into());
+                    Ok(vec![out])
+                }
+                (FeatureTransform::OneHotEncode, FeatureStateEntry::OneHot { vocab, .. }) => {
+                   let col_str = col.cast(&DataType::String)?;
+                   let s_str = col_str.as_materialized_series();
+                   let alias = spec.alias.as_deref().unwrap_or(&spec.column);
+                   let cols = crate::simd::onehot_lookup_simd(s_str, &vocab.categories, alias)
+                        .map_err(|e| anyhow!("SIMD OneHot failed: {}", e))?;
+                   Ok(cols)
+                }
+                 (FeatureTransform::CountEncode, FeatureStateEntry::Count { stats, .. }) => {
+                    let transformed = transform_count(df, &spec.column, stats, spec.alias.as_deref())?;
+                    let output_name = spec.alias.as_deref().unwrap_or(&spec.column);
+                    // transform_count returns DF with new column appended.
+                    let col = transformed.column(output_name)?.clone();
+                    let s = col.as_materialized_series().clone();
+                    Ok(vec![s])
+                }
+                _ => Err(anyhow!("Mismatch or supported transform in direct mode")),
             }
-            FeatureStateEntry::Standard { stats, .. } => {
-                transform_standard(&result, &spec.column, stats, spec.alias.as_deref())?
-            }
-            FeatureStateEntry::OneHot { vocab, .. } => {
-                transform_onehot(&result, &spec.column, vocab, spec.alias.as_deref())?
-            }
-            FeatureStateEntry::Count { stats, .. } => {
-                transform_count(&result, &spec.column, stats, spec.alias.as_deref())?
-            }
-        };
+        })
+        .collect();
+
+    // Check for errors
+    let mut new_cols = Vec::new();
+    for res in new_columns_results {
+        let cols = res?;
+        new_cols.extend(cols);
+    }
+
+    // Apply updates to DF
+    let mut result = df.clone();
+    for s in new_cols {
+        result.with_column(Column::from(s))?;
     }
 
     Ok(result)
