@@ -623,17 +623,17 @@ pub fn exprs_from_state(spec: &FeatureSpec, entry: &FeatureStateEntry) -> Result
                 let min = stats.min;
                 let max = stats.max;
                 let output_name = spec.alias.as_deref().unwrap_or(&spec.column).to_string();
-                
+
                 let func = move |c: Column| {
                     let s = c.as_materialized_series();
                     crate::simd::minmax_scale_simd(s, min, max).map(|s| Some(s.into()))
                 };
-                
+
                 let expr = col(&spec.column)
                     .cast(DataType::Float64)
                     .map(func, GetOutput::from_type(DataType::Float64))
                     .alias(output_name);
-                
+
                 Ok(vec![expr])
             }
             #[cfg(not(feature = "simd"))]
@@ -655,17 +655,17 @@ pub fn exprs_from_state(spec: &FeatureSpec, entry: &FeatureStateEntry) -> Result
                 let mean = stats.mean;
                 let std = stats.std;
                 let output_name = spec.alias.as_deref().unwrap_or(&spec.column).to_string();
-                
+
                 let func = move |c: Column| {
                     let s = c.as_materialized_series();
                     crate::simd::standard_scale_simd(s, mean, std).map(|s| Some(s.into()))
                 };
-                
+
                 let expr = col(&spec.column)
                     .cast(DataType::Float64)
                     .map(func, GetOutput::from_type(DataType::Float64))
                     .alias(output_name);
-                
+
                 Ok(vec![expr])
             }
             #[cfg(not(feature = "simd"))]
@@ -687,7 +687,7 @@ pub fn exprs_from_state(spec: &FeatureSpec, entry: &FeatureStateEntry) -> Result
                 // but return them as individual lit expressions since Polars struct/unnest
                 // API is complex. The SIMD optimization happens during the scan when
                 // Polars fuses the expressions.
-                // 
+                //
                 // Actually, to truly leverage the SIMD kernel that computes ALL columns
                 // at once, we need a different approach. For now, we use the scalar
                 // Polars expressions (which Polars internally vectorizes well).
