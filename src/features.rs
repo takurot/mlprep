@@ -325,13 +325,13 @@ pub fn fit_count(df: &DataFrame, column: &str) -> Result<CountStats> {
     Ok(CountStats { counts, total })
 }
 
-/// Transform column using Count encoding (frequency)
-pub fn transform_count(
+/// Transform column using Count encoding (frequency) - Series version
+pub fn transform_count_series(
     df: &DataFrame,
     column: &str,
     stats: &CountStats,
     alias: Option<&str>,
-) -> Result<DataFrame> {
+) -> Result<Series> {
     let col = df
         .column(column)
         .map_err(|e| anyhow!("Column '{}' not found: {}", column, e))?;
@@ -359,14 +359,22 @@ pub fn transform_count(
     }
 
     let output_name = alias.unwrap_or(column);
-    let series = Series::new(output_name.into(), values);
+    Ok(Series::new(output_name.into(), values))
+}
 
+/// Transform column using Count encoding (frequency)
+pub fn transform_count(
+    df: &DataFrame,
+    column: &str,
+    stats: &CountStats,
+    alias: Option<&str>,
+) -> Result<DataFrame> {
+    let series = transform_count_series(df, column, stats, alias)?;
     let mut result = df.clone();
     result = result
         .with_column(series)
         .map_err(|e| anyhow!("Failed to add count-encoded column: {}", e))?
         .clone();
-
     Ok(result)
 }
 
@@ -417,6 +425,22 @@ pub fn transform_features(
     config: &FeatureConfig,
     state: &FeatureState,
 ) -> Result<DataFrame> {
+    #[cfg(feature = "simd")]
+    {
+        transform_features_batched(df, config, state)
+    }
+
+    #[cfg(not(feature = "simd"))]
+    {
+        transform_features_sequential(df, config, state)
+    }
+}
+
+pub fn transform_features_sequential(
+    df: &DataFrame,
+    config: &FeatureConfig,
+    state: &FeatureState,
+) -> Result<DataFrame> {
     let mut result = df.clone();
 
     for spec in &config.features {
@@ -444,6 +468,219 @@ pub fn transform_features(
                 transform_count(&result, &spec.column, stats, spec.alias.as_deref())?
             }
         };
+    }
+
+    Ok(result)
+}
+
+#[cfg(feature = "simd")]
+pub fn transform_features_batched(
+    df: &DataFrame,
+    config: &FeatureConfig,
+    state: &FeatureState,
+) -> Result<DataFrame> {
+    use rayon::prelude::*;
+    use std::collections::HashSet;
+
+    // 1. Check for dependency chaining and missing columns
+    let available_cols: HashSet<String> = df
+        .get_column_names()
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    let mut created_cols = HashSet::new();
+    let mut is_chained = false;
+    let mut missing_input = false;
+
+    // We also group specs by input column here to prepare for optimized execution
+    // Use Vec to preserve deterministic order (first appearance of input column)
+    let mut groups: Vec<(String, Vec<&FeatureSpec>)> = Vec::new();
+
+    for spec in &config.features {
+        // Chaining check: If input was created/modified by a previous step in this list -> Chained
+        if created_cols.contains(&spec.column) {
+            is_chained = true;
+        }
+
+        // Missing Input check: Input not in source DF and not created by previous step
+        if !available_cols.contains(&spec.column) && !created_cols.contains(&spec.column) {
+            missing_input = true;
+        }
+
+        // Track output alias (or overwrite)
+        let output_name = spec.alias.clone().unwrap_or(spec.column.clone());
+        created_cols.insert(output_name);
+
+        // Grouping (Linear search is fine for small N columns)
+        if let Some((_, specs)) = groups.iter_mut().find(|(name, _)| name == &spec.column) {
+            specs.push(spec);
+        } else {
+            groups.push((spec.column.clone(), vec![spec]));
+        }
+    }
+
+    if missing_input {
+        return transform_features_sequential(df, config, state);
+    }
+
+    if is_chained {
+        // Fallback to sequential if there are dependencies between features in this step
+        return transform_features_sequential(df, config, state);
+    }
+
+    // validate state presence
+    for spec in &config.features {
+        if state.get_entry(&spec.column, &spec.transform).is_none() {
+            return Err(anyhow!(
+                "No fitted state for column '{}' with transform {:?}",
+                spec.column,
+                spec.transform
+            ));
+        }
+    }
+
+    // Helper to process a group of specs for a single input column
+    let process_group = |col_name: &str, specs: &Vec<&FeatureSpec>| -> Result<Vec<Series>> {
+        let col = df
+            .column(col_name)
+            .map_err(|e| anyhow!("Column not found: {}", e))?;
+
+        // Determine required casts/checks
+        let needs_f64 = specs.iter().any(|s| {
+            matches!(
+                s.transform,
+                FeatureTransform::MinMaxScale | FeatureTransform::StandardScale
+            )
+        });
+        let needs_str = specs.iter().any(|s| {
+            matches!(
+                s.transform,
+                FeatureTransform::OneHotEncode | FeatureTransform::CountEncode
+            )
+        });
+
+        // Prepare casted Series if needed
+        let s_f64 = if needs_f64 {
+            Some(
+                col.cast(&DataType::Float64)?
+                    .as_materialized_series()
+                    .clone(),
+            )
+        } else {
+            None
+        };
+
+        let s_str = if needs_str {
+            // Strict check: Must be String type for OneHot/Count in batches SIMD mode
+            if col.dtype() != &DataType::String {
+                return Err(anyhow!(
+                    "Column '{}' must be of type String for OneHot/Count encoding, got {:?}",
+                    col_name,
+                    col.dtype()
+                ));
+            }
+            Some(col.as_materialized_series().clone())
+        } else {
+            None
+        };
+
+        let mut results = Vec::with_capacity(specs.len());
+
+        for spec in specs {
+            let entry = state.get_entry(&spec.column, &spec.transform).unwrap(); // Verified above
+
+            match (spec.transform.clone(), entry) {
+                (FeatureTransform::MinMaxScale, FeatureStateEntry::MinMax { stats, .. }) => {
+                    let s = s_f64.as_ref().unwrap();
+                    let transformed = crate::simd::minmax_scale_simd(s, stats.min, stats.max)
+                        .map_err(|e| anyhow!("SIMD MinMax failed: {}", e))?;
+
+                    let output_name = spec.alias.as_deref().unwrap_or(&spec.column);
+                    let mut out = transformed;
+                    out.rename(output_name.into());
+                    results.push(out);
+                }
+                (FeatureTransform::StandardScale, FeatureStateEntry::Standard { stats, .. }) => {
+                    let s = s_f64.as_ref().unwrap();
+                    let transformed = crate::simd::standard_scale_simd(s, stats.mean, stats.std)
+                        .map_err(|e| anyhow!("SIMD Standard failed: {}", e))?;
+
+                    let output_name = spec.alias.as_deref().unwrap_or(&spec.column);
+                    let mut out = transformed;
+                    out.rename(output_name.into());
+                    results.push(out);
+                }
+                (FeatureTransform::OneHotEncode, FeatureStateEntry::OneHot { vocab, .. }) => {
+                    let s = s_str.as_ref().unwrap();
+                    let alias = spec.alias.as_deref().unwrap_or(&spec.column);
+                    let cols = crate::simd::onehot_lookup_simd(s, &vocab.categories, alias)
+                        .map_err(|e| anyhow!("SIMD OneHot failed: {}", e))?;
+                    results.extend(cols);
+                }
+                (FeatureTransform::CountEncode, FeatureStateEntry::Count { stats, .. }) => {
+                    // transform_count_series expects DataFrame to look up column.
+                    // We can't use it easily here without refactoring it to take Series.
+                    // But wait, we have the Series (s_str) or original col.
+                    // Let's refactor transform_count_series to take Series later?
+                    // For now, call original using df (overhead of lookup) OR adapt logic.
+                    // `transform_count_series` does: df.column(name) -> .str() -> iter.
+                    // We have s_str which is Series(String).
+                    // Let's reimplement small logic here or assume overhead is negligible compared to scaling.
+                    // Better: reuse the s_str we prepared!
+                    let s = s_str.as_ref().unwrap();
+                    let ca = s.str()?;
+                    let mut values = Vec::with_capacity(ca.len());
+                    for opt_val in ca.into_iter() {
+                        match opt_val {
+                            Some(val) => {
+                                let count = *stats.counts.get(val).unwrap_or(&0);
+                                let freq = if stats.total > 0 {
+                                    count as f64 / stats.total as f64
+                                } else {
+                                    0.0
+                                };
+                                values.push(freq);
+                            }
+                            None => values.push(0.0),
+                        }
+                    }
+                    let output_name = spec.alias.as_deref().unwrap_or(&spec.column);
+                    results.push(Series::new(output_name.into(), values));
+                }
+                _ => return Err(anyhow!("Mismatch or supported transform in direct mode")),
+            }
+        }
+        Ok(results)
+    };
+
+    // 2. Execute Groups (Parallel or Sequential based on count)
+    // Threshold: if fewer than 8 columns, threading overhead might exceed benefit.
+    // Especially since Polars uses a thread pool and Rayon might contend or add startup cost.
+    let threshold = 8; // Tunable
+    let use_parallel = groups.len() >= threshold;
+
+    let group_results: Result<Vec<Vec<Series>>> = if use_parallel {
+        groups
+            .into_par_iter()
+            .map(|(col_name, specs)| process_group(&col_name, &specs))
+            .collect()
+    } else {
+        groups
+            .into_iter()
+            .map(|(col_name, specs)| process_group(&col_name, &specs))
+            .collect()
+    };
+
+    // Check for errors and flatten
+    let mut new_cols = Vec::new();
+    for group_res in group_results? {
+        new_cols.extend(group_res);
+    }
+
+    // Apply updates to DF
+    let mut result = df.clone();
+    for s in new_cols {
+        result.with_column(Column::from(s))?;
     }
 
     Ok(result)
@@ -1094,4 +1331,136 @@ mod tests {
         assert!(test_result.column("city_LA").is_ok());
         assert!(test_result.column("city_NYC").is_ok());
     }
+
+    #[test]
+    fn test_transform_features_chained_dependency() {
+        // Test that we gracefully fallback to sequential execution when
+        // a feature depends on another feature in the same list.
+        let df = df! {
+            "value" => &[10.0, 20.0, 30.0, 40.0, 50.0]
+        }
+        .unwrap();
+
+        let state_minmax = FeatureStateEntry::MinMax {
+            column: "value".to_string(),
+            stats: MinMaxStats {
+                min: 10.0,
+                max: 50.0,
+            },
+        };
+        // Dependent feature: scaling "scaled_value" which is output of first step
+        // Range 0.0 to 1.0. Mean=0.5, Std=0.353...
+        // We manually fit for test purposes.
+        let state_standard = FeatureStateEntry::Standard {
+            column: "scaled_value".to_string(),
+            stats: StandardStats {
+                mean: 0.5,
+                std: 0.35355339059327373,
+            },
+        };
+
+        let mut state = FeatureState::new();
+        state.add_entry(state_minmax);
+        state.add_entry(state_standard);
+
+        let config = FeatureConfig {
+            features: vec![
+                FeatureSpec {
+                    column: "value".to_string(),
+                    transform: FeatureTransform::MinMaxScale,
+                    alias: Some("scaled_value".to_string()),
+                },
+                FeatureSpec {
+                    column: "scaled_value".to_string(), // Depends on previous step
+                    transform: FeatureTransform::StandardScale,
+                    alias: Some("double_scaled".to_string()),
+                },
+            ],
+        };
+
+        // This should work even with SIMD enabled due to fallback mechanism
+        #[cfg(feature = "simd")]
+        {
+            let result = transform_features_batched(&df, &config, &state).unwrap();
+            let double_scaled = result.column("double_scaled").unwrap().f64().unwrap();
+            // Check approximate values
+            assert!((double_scaled.get(2).unwrap() - 0.0).abs() < 1e-5); // (0.5 - 0.5)/std = 0
+        }
+
+        // Also verify standard path
+        let result = transform_features_sequential(&df, &config, &state).unwrap();
+        let double_scaled = result.column("double_scaled").unwrap().f64().unwrap();
+        assert!((double_scaled.get(2).unwrap() - 0.0).abs() < 1e-5);
+    }
+}
+
+#[test]
+fn test_transform_features_chained_inplace_overwrite() {
+    // Test in-place overwrite chaining:
+    // 1. MinMaxScale "value" -> overwrite "value"
+    // 2. StandardScale "value" -> "value_scaled"
+    // If batched path uses original "value" for step 2, result is wrong.
+    // Falls back to sequential.
+
+    let df = df! {
+        "value" => &[0.0, 50.0, 100.0]
+    }
+    .unwrap();
+
+    // Step 1 stats: min=0, max=100 -> maps 0..100 to 0..1
+    let state_minmax = FeatureStateEntry::MinMax {
+        column: "value".to_string(), // Matches input
+        stats: MinMaxStats {
+            min: 0.0,
+            max: 100.0,
+        },
+    };
+
+    // Step 2 stats: expected input is 0..1. Let's say we standard scale it.
+    // Mean=0.5, Std=0.5 (approx).
+    let state_standard = FeatureStateEntry::Standard {
+        column: "value".to_string(), // Matches updated column
+        stats: StandardStats {
+            mean: 0.5,
+            std: 0.5,
+        },
+    };
+
+    let mut state = FeatureState::new();
+    state.add_entry(state_minmax);
+    state.add_entry(state_standard);
+
+    let config = FeatureConfig {
+        features: vec![
+            FeatureSpec {
+                column: "value".to_string(),
+                transform: FeatureTransform::MinMaxScale,
+                alias: None, // Overwrite
+            },
+            FeatureSpec {
+                column: "value".to_string(), // Input is definitely "value"
+                transform: FeatureTransform::StandardScale,
+                alias: Some("value_final".to_string()),
+            },
+        ],
+    };
+
+    #[cfg(feature = "simd")]
+    {
+        // Should fallback to sequential
+        let result = transform_features_batched(&df, &config, &state).unwrap();
+
+        // Check step 1 overwrite
+        let val = result.column("value").unwrap().f64().unwrap();
+        assert!((val.get(1).unwrap() - 0.5).abs() < 1e-10);
+
+        // Check step 2 (0.5 - 0.5) / 0.5 = 0.0
+        let final_val = result.column("value_final").unwrap().f64().unwrap();
+        assert!((final_val.get(1).unwrap() - 0.0).abs() < 1e-10);
+    }
+
+    // Also verify sequential path directly
+    let result = transform_features_sequential(&df, &config, &state).unwrap();
+    let final_val = result.column("value_final").unwrap().f64().unwrap();
+    assert!((final_val.get(1).unwrap() - 0.0).abs() < 1e-10);
 }

@@ -379,7 +379,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
   * [x] OneHot lookup SIMD kernel
 * **Verify**: scaling 処理で 2x 以上の高速化。各アーキテクチャでのビルド確認。
 
-### PR-30: Polars map Overhead Avoidance `[TODO]`
+### PR-30: Polars map Overhead Avoidance `[DONE]`
 * **Goal**: `Expr::map` 使用時のオーバーヘッドを回避し、SIMD最適化の効果を最大化。
 * **Deps**: PR-24
 * **Tasks**:

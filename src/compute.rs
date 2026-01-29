@@ -352,6 +352,30 @@ fn apply_features(
             .map_err(|e| MlPrepError::FeatureError(format!("Failed to fit features: {}", e)))?
     };
 
+    #[cfg(feature = "simd")]
+    {
+        // PR-30: Use map_batches to integrate SIMD transform into Lazy plan.
+        // This avoids eager collect() while still materializing the DataFrame for the SIMD kernel
+        // at execution time.
+        if !runtime.streaming {
+            let config = features_step.config.clone();
+            let state_clone = state.clone();
+
+            return Ok(lf.map(
+                move |df| {
+                    features::transform_features_batched(&df, &config, &state_clone).map_err(|e| {
+                        PolarsError::ComputeError(
+                            format!("Direct feature transform failed: {}", e).into(),
+                        )
+                    })
+                },
+                OptFlags::default(),
+                None,
+                None,
+            ));
+        }
+    }
+
     // Build lazy expressions for each feature transform using the fitted state.
     let mut exprs: Vec<Expr> = Vec::new();
     for spec in &features_step.config.features {

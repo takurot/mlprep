@@ -1,0 +1,22 @@
+inputs:
+  - path: "examples/bench_scaling/data.parquet"
+    format: "parquet"
+
+steps:
+  - type: features
+    config:
+      features:
+        - column: "col_0"
+          transform: "min_max_scale"
+        - column: "col_1"
+          transform: "min_max_scale"
+        - column: "col_2"
+          transform: "min_max_scale"
+        - column: "col_3"
+          transform: "min_max_scale"
+        - column: "col_4"
+          transform: "min_max_scale"
+
+outputs:
+  - path: "examples/bench_scaling/output.parquet"
+    format: "parquet"
