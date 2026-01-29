@@ -360,11 +360,14 @@ fn apply_features(
         if !runtime.streaming {
             let config = features_step.config.clone();
             let state_clone = state.clone();
-            
+
             return Ok(lf.map(
                 move |df| {
-                    features::transform_features_batched(&df, &config, &state_clone)
-                        .map_err(|e| PolarsError::ComputeError(format!("Direct feature transform failed: {}", e).into()))
+                    features::transform_features_batched(&df, &config, &state_clone).map_err(|e| {
+                        PolarsError::ComputeError(
+                            format!("Direct feature transform failed: {}", e).into(),
+                        )
+                    })
                 },
                 OptFlags::default(),
                 None,
