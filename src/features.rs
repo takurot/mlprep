@@ -481,7 +481,7 @@ pub fn transform_features_batched(
     state: &FeatureState,
 ) -> Result<DataFrame> {
     use rayon::prelude::*;
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashSet;
 
     // 1. Check for dependency chaining and missing columns
     let available_cols: HashSet<String> = df
@@ -494,23 +494,30 @@ pub fn transform_features_batched(
     let mut missing_input = false;
 
     // We also group specs by input column here to prepare for optimized execution
-    let mut groups: HashMap<String, Vec<&FeatureSpec>> = HashMap::new();
+    // Use Vec to preserve deterministic order (first appearance of input column)
+    let mut groups: Vec<(String, Vec<&FeatureSpec>)> = Vec::new();
 
     for spec in &config.features {
-        if !available_cols.contains(&spec.column) {
-            // If input is not in original DF, maybe it was created by a previous step?
-            if created_cols.contains(&spec.column) {
-                is_chained = true;
-            } else {
-                missing_input = true;
-            }
+        // Chaining check: If input was created/modified by a previous step in this list -> Chained
+        if created_cols.contains(&spec.column) {
+            is_chained = true;
         }
 
-        // Track output alias
+        // Missing Input check: Input not in source DF and not created by previous step
+        if !available_cols.contains(&spec.column) && !created_cols.contains(&spec.column) {
+            missing_input = true;
+        }
+
+        // Track output alias (or overwrite)
         let output_name = spec.alias.clone().unwrap_or(spec.column.clone());
         created_cols.insert(output_name);
 
-        groups.entry(spec.column.clone()).or_default().push(spec);
+        // Grouping (Linear search is fine for small N columns)
+        if let Some((_, specs)) = groups.iter_mut().find(|(name, _)| name == &spec.column) {
+            specs.push(spec);
+        } else {
+            groups.push((spec.column.clone(), vec![spec]));
+        }
     }
 
     if missing_input {
@@ -542,7 +549,7 @@ pub fn transform_features_batched(
             .column(col_name)
             .map_err(|e| anyhow!("Column not found: {}", e))?;
 
-        // Determine required casts to avoid redundant work
+        // Determine required casts/checks
         let needs_f64 = specs.iter().any(|s| {
             matches!(
                 s.transform,
@@ -556,11 +563,6 @@ pub fn transform_features_batched(
             )
         });
 
-        // Current limitation: FeatureTransform::CountEncode in transform_count_series
-        // does its own .str() check/cast if needed (it calls .str() on Column).
-        // For MinMax/Standard, we cast to f64.
-        // For OneHot, we cast to String.
-        
         // Prepare casted Series if needed
         let s_f64 = if needs_f64 {
             Some(col.cast(&DataType::Float64)?.as_materialized_series().clone())
@@ -569,15 +571,19 @@ pub fn transform_features_batched(
         };
         
         let s_str = if needs_str {
-            // Check if already string to avoid clone/cast overhead?
-            if col.dtype() == &DataType::String {
-                Some(col.as_materialized_series().clone())
-            } else {
-                 Some(col.cast(&DataType::String)?.as_materialized_series().clone())
+            // Strict check: Must be String type for OneHot/Count in batches SIMD mode
+            if col.dtype() != &DataType::String {
+                return Err(anyhow!(
+                    "Column '{}' must be of type String for OneHot/Count encoding, got {:?}", 
+                    col_name, 
+                    col.dtype()
+                ));
             }
+            Some(col.as_materialized_series().clone())
         } else {
             None
         };
+
 
         let mut results = Vec::with_capacity(specs.len());
 
@@ -1383,4 +1389,70 @@ mod tests {
         let double_scaled = result.column("double_scaled").unwrap().f64().unwrap();
         assert!((double_scaled.get(2).unwrap() - 0.0).abs() < 1e-5);
     }
-}
+    }
+
+    #[test]
+    fn test_transform_features_chained_inplace_overwrite() {
+        // Test in-place overwrite chaining:
+        // 1. MinMaxScale "value" -> overwrite "value"
+        // 2. StandardScale "value" -> "value_scaled"
+        // If batched path uses original "value" for step 2, result is wrong.
+        // Falls back to sequential.
+
+        let df = df! {
+            "value" => &[0.0, 50.0, 100.0]
+        }
+        .unwrap();
+
+        // Step 1 stats: min=0, max=100 -> maps 0..100 to 0..1
+        let state_minmax = FeatureStateEntry::MinMax {
+            column: "value".to_string(), // Matches input
+            stats: MinMaxStats { min: 0.0, max: 100.0 },
+        };
+
+        // Step 2 stats: expected input is 0..1. Let's say we standard scale it.
+        // Mean=0.5, Std=0.5 (approx).
+        let state_standard = FeatureStateEntry::Standard {
+            column: "value".to_string(), // Matches updated column
+            stats: StandardStats { mean: 0.5, std: 0.5 },
+        };
+
+        let mut state = FeatureState::new();
+        state.add_entry(state_minmax);
+        state.add_entry(state_standard);
+
+        let config = FeatureConfig {
+            features: vec![
+                FeatureSpec {
+                    column: "value".to_string(),
+                    transform: FeatureTransform::MinMaxScale,
+                    alias: None, // Overwrite
+                },
+                FeatureSpec {
+                    column: "value".to_string(), // Input is definitely "value"
+                    transform: FeatureTransform::StandardScale,
+                    alias: Some("value_final".to_string()),
+                },
+            ],
+        };
+
+        #[cfg(feature = "simd")]
+        {
+            // Should fallback to sequential
+            let result = transform_features_batched(&df, &config, &state).unwrap();
+            
+            // Check step 1 overwrite
+            let val = result.column("value").unwrap().f64().unwrap();
+            assert!((val.get(1).unwrap() - 0.5).abs() < 1e-10);
+
+            // Check step 2 (0.5 - 0.5) / 0.5 = 0.0
+            let final_val = result.column("value_final").unwrap().f64().unwrap();
+            assert!((final_val.get(1).unwrap() - 0.0).abs() < 1e-10);
+        }
+        
+        // Also verify sequential path directly
+        let result = transform_features_sequential(&df, &config, &state).unwrap();
+        let final_val = result.column("value_final").unwrap().f64().unwrap();
+        assert!((final_val.get(1).unwrap() - 0.0).abs() < 1e-10);
+    }
+
