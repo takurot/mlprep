@@ -10,7 +10,7 @@ Get up and running with mlprep in 5 minutes!
 ## Step 1: Install mlprep
 
 ```bash
-pip install mlprep
+pip install mlprep-rust
 ```
 
 Verify installation:

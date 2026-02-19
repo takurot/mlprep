@@ -3,7 +3,7 @@
 ## From PyPI
 
 ```bash
-pip install mlprep
+pip install mlprep-rust
 ```
 
 ## From Source

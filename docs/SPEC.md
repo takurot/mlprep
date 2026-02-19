@@ -13,9 +13,9 @@
 
 ## 1.3 成果物（配布形態）
 
-* Pythonパッケージ：`pip install mlprep`
+* Pythonパッケージ：`pip install mlprep-rust`
   * プロジェクト名：`mlprep`
-  * パッケージ名：`mlprep`
+  * パッケージ名：`mlprep-rust`
 * 同梱CLI：`mlprep ...`
 * ドキュメント：APIリファレンス、チュートリアル、ベンチマーク、移行ガイド（pandas→mlprep）
 

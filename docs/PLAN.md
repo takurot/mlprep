@@ -221,7 +221,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
   * API Docs 生成 (pdoc / rustdoc)
   * `README.md` 更新（Getting Started）
   * CI: Release Workflow (Tag push -> PyPI upload)
-* **Verify**: PyPIから `pip install mlprep` して動くこと。
+* **Verify**: PyPIから `pip install mlprep-rust` して動くこと。
 
 ---
 
@@ -343,7 +343,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
   * Breaking changes有無の確認とマイグレーションガイド
   * v1.0.0タグ作成・リリース
   * アナウンス（README、Twitter/X、Hacker News等）
-* **Verify**: `pip install mlprep==1.0.0` で本番利用開始可能。
+* **Verify**: `pip install mlprep-rust==1.0.0` で本番利用開始可能。
 
 ---
 
