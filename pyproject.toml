@@ -4,10 +4,10 @@ build-backend = "maturin"
 
 [project]
 name = "mlprep-rust"
-version = "0.3.0"
+version = "0.3.1"
 description = "High-performance no-code data preprocessing engine"
 authors = [
-    {name = "Takuro Wada", email = "public@takuro.t"},
+    {name = "Takuro Tsujikawa", email = "takuro.tsujikawa@gmail.com"},
 ]
 readme = "README.md"
 requires-python = ">=3.10"

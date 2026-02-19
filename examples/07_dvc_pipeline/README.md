@@ -11,7 +11,7 @@ This example shows how to run an `mlprep` pipeline from a DVC stage so processed
 
 1. Install tools (inside your virtualenv):
    ```bash
-   pip install mlprep dvc
+   pip install mlprep-rust dvc
    ```
 2. Move into the example:
    ```bash

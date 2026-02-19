@@ -5,7 +5,7 @@
 
 [![CI](https://github.com/takurot/mlprep/actions/workflows/ci.yml/badge.svg)](https://github.com/takurot/mlprep/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://pypi.org/project/mlprep/)
+[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://pypi.org/project/mlprep-rust/)
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange)](https://www.rust-lang.org/)
 
 ## 🎬 Introduction Video
@@ -41,7 +41,7 @@ Don't let dirty data crash your training. `mlprep` isolates invalid rows (schema
 
 ### 1. Install
 ```bash
-pip install mlprep
+pip install mlprep-rust
 ```
 
 ### 2. Define your pipeline (`pipeline.yaml`)

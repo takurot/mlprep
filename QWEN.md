@@ -31,7 +31,7 @@ The project is a hybrid Rust/Python implementation:
 
 ```bash
 # From PyPI
-pip install mlprep
+pip install mlprep-rust
 
 # From source (development)
 pip install maturin

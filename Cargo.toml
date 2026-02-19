@@ -4,10 +4,10 @@ resolver = "2"
 
 [package]
 name = "mlprep-rust"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 description = "High-performance no-code data preprocessing engine"
-authors = ["Takuro Wada <public@takuro.t>"]
+authors = ["Takuro Tsujikawa <takuro.tsujikawa@gmail.com>"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/takurot/mlprep"
