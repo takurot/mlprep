@@ -256,6 +256,10 @@ pub struct Validate {
     pub checks: CheckConfig,
     #[serde(default)]
     pub mode: ValidationMode,
+    /// Path to write quarantined (invalid) rows when mode is `quarantine`.
+    /// Defaults to `"quarantine.parquet"` if not specified.
+    #[serde(default)]
+    pub quarantine_path: Option<String>,
 }
 
 /// Feature engineering step

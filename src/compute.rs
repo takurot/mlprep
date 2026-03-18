@@ -314,7 +314,32 @@ fn apply_validate(
             }
         }
         ValidationMode::Warn => Ok(lf),
-        ValidationMode::Quarantine => Ok(lf.filter(mask_expr.not())),
+        ValidationMode::Quarantine => {
+            let q_path = validate
+                .quarantine_path
+                .as_deref()
+                .unwrap_or("quarantine.parquet")
+                .to_string();
+
+            // Collect invalid rows and write to quarantine file
+            let quarantine_df = lf
+                .clone()
+                .filter(mask_expr.clone())
+                .collect()
+                .map_err(MlPrepError::PolarsError)?;
+
+            if !quarantine_df.is_empty() {
+                if let Some(parent) = std::path::Path::new(&q_path).parent() {
+                    if !parent.as_os_str().is_empty() {
+                        std::fs::create_dir_all(parent).map_err(MlPrepError::IoError)?;
+                    }
+                }
+                io::write_parquet(quarantine_df, &q_path)?;
+            }
+
+            // Return only valid rows
+            Ok(lf.filter(mask_expr.not()))
+        }
     }
 }
 

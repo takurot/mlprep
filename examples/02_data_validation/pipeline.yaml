@@ -14,6 +14,7 @@ steps:
         - name: user_type
           not_null: true
     mode: quarantine
+    quarantine_path: quarantine.parquet
 
 outputs:
   - path: clean_output.parquet
