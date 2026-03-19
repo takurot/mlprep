@@ -90,6 +90,65 @@ outputs: []
 }
 
 #[test]
+fn test_security_quarantine_path_enforcement() {
+    let dir = tempdir().unwrap();
+    let allowed_dir = dir.path().join("allowed");
+    fs::create_dir(&allowed_dir).unwrap();
+    let outside_dir = dir.path().join("outside");
+    fs::create_dir(&outside_dir).unwrap();
+
+    let input_path = allowed_dir.join("input.csv");
+    fs::write(&input_path, "id,age\n1,25\n2,150").unwrap();
+
+    let quarantine_path = outside_dir.join("quarantine.parquet");
+    let config_path = allowed_dir.join("pipeline.yaml");
+    let yaml = format!(
+        r#"
+inputs:
+  - path: "{input}"
+steps:
+  - type: validate
+    checks:
+      columns:
+        - name: age
+          range: [0, 120]
+    mode: quarantine
+    quarantine_path: "{quarantine}"
+outputs: []
+"#,
+        input = input_path.to_str().unwrap(),
+        quarantine = quarantine_path.to_str().unwrap()
+    );
+    fs::write(&config_path, yaml).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_mlprep"))
+        .args([
+            "run",
+            config_path.to_str().unwrap(),
+            "--allowed-paths",
+            allowed_dir.to_str().unwrap(),
+        ])
+        .output()
+        .expect("Failed to run mlprep");
+
+    assert!(
+        !output.status.success(),
+        "Should fail when quarantine_path is outside allowed paths"
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Access denied"),
+        "Should report Access denied. Actual: {}",
+        stderr
+    );
+    assert!(
+        !quarantine_path.exists(),
+        "Should not create quarantine file outside allowed paths"
+    );
+}
+
+#[test]
 fn test_security_log_masking() {
     let dir = tempdir().unwrap();
     let input_path = dir.path().join("input.csv");

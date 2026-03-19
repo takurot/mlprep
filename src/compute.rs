@@ -279,8 +279,6 @@ fn apply_validate(
     use crate::dsl::ValidationMode;
     use crate::validate::{summarize_violations_lazy, violation_mask_expr};
 
-    let _ = security_context;
-
     // Validation relies on expression masks so we can stay in Lazy mode.
     let Some(mask_expr) = violation_mask_expr(&validate.checks)
         .map_err(|e| MlPrepError::ValidationError(e.to_string()))?
@@ -320,6 +318,12 @@ fn apply_validate(
                 .as_deref()
                 .unwrap_or("quarantine.parquet")
                 .to_string();
+            security_context.validate_path(&q_path).map_err(|e| {
+                MlPrepError::IoError(std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    e.to_string(),
+                ))
+            })?;
 
             // Collect invalid rows and write to quarantine file
             let quarantine_df = lf
