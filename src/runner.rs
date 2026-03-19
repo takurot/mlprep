@@ -44,7 +44,7 @@ pub fn execution_pipeline(
     run_id: Uuid,
     security_config: crate::security::SecurityConfig,
     runtime_override: Option<crate::dsl::RuntimeConfig>,
-) -> MlPrepResult<()> {
+) -> MlPrepResult<Metrics> {
     let mut metrics = Metrics::new();
     info!("Loading pipeline from {:?}", path);
 
@@ -122,6 +122,7 @@ pub fn execution_pipeline(
     } else {
         io::read_csv(&input_conf.path)?
     };
+    let input_lf = lf.clone();
     metrics.record_step("read_input", start_read.elapsed());
 
     let dp = DataPipeline::new(lf);
@@ -162,10 +163,15 @@ pub fn execution_pipeline(
         info!("No outputs specified, executing pipeline without output...");
         let df = processed_dp.collect(runtime.streaming)?;
         metrics.record_step("execution", start_exec.elapsed());
-        metrics.rows_read = df.height(); // Approx since we executed
-        metrics.rows_written = 0;
+        metrics.rows_read = input_lf
+            .select([len()])
+            .collect()
+            .ok()
+            .and_then(|df| df["len"].u32().ok().and_then(|ca| ca.get(0)))
+            .unwrap_or(0) as usize;
+        metrics.rows_written = df.height();
         info!("Done.");
-        return Ok(()); // Should we write lineage here too? Probably yes.
+        return Ok(metrics);
     }
 
     let output_conf = &pipeline.outputs[0];
@@ -186,8 +192,12 @@ pub fn execution_pipeline(
     let mut final_df = processed_dp.collect(runtime.streaming)?;
     metrics.record_step("execution", start_exec.elapsed());
     metrics.rows_written = final_df.height();
-    // In lazy exec, we might not verify rows_read easily without scanning input separately
-    // metrics.rows_read = ???
+    metrics.rows_read = input_lf
+        .select([len()])
+        .collect()
+        .ok()
+        .and_then(|df| df["len"].u32().ok().and_then(|ca| ca.get(0)))
+        .unwrap_or(0) as usize;
 
     let start_write = Instant::now();
     if output_conf.path.ends_with(".parquet") {
@@ -236,16 +246,18 @@ pub fn execution_pipeline(
     }
 
     info!("Pipeline completed successfully.");
-    Ok(())
+    Ok(metrics)
 }
 
 #[cfg(test)]
 mod tests {
 
+    use super::execution_pipeline;
     use crate::security::{SecurityConfig, SecurityContext};
     use std::fs::File;
     use std::io::Write;
     use tempfile::tempdir;
+    use uuid::Uuid;
 
     #[test]
     fn test_sandboxing() {
@@ -284,5 +296,46 @@ mod tests {
 
         let non_existent_restricted = restricted_dir.join("output.parquet");
         assert!(context.validate_path(&non_existent_restricted).is_err());
+    }
+
+    #[test]
+    fn test_rows_read_metric_with_output() {
+        let dir = tempdir().unwrap();
+        let input_path = dir.path().join("input.csv");
+        let output_path = dir.path().join("output.csv");
+        let pipeline_path = dir.path().join("pipeline.yaml");
+
+        // 3 data rows
+        File::create(&input_path)
+            .unwrap()
+            .write_all(b"a,b\n1,2\n3,4\n5,6\n")
+            .unwrap();
+
+        let pipeline_yaml = format!(
+            "inputs:\n  - path: {}\nsteps: []\noutputs:\n  - path: {}\n",
+            input_path.display(),
+            output_path.display()
+        );
+        File::create(&pipeline_path)
+            .unwrap()
+            .write_all(pipeline_yaml.as_bytes())
+            .unwrap();
+
+        let metrics = execution_pipeline(
+            &pipeline_path,
+            Uuid::new_v4(),
+            SecurityConfig {
+                allowed_paths: None,
+                mask_columns: None,
+            },
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(
+            metrics.rows_read, 3,
+            "rows_read should equal input row count"
+        );
+        assert_eq!(metrics.rows_written, 3);
     }
 }
