@@ -279,12 +279,8 @@ fn apply_validate(
     use crate::dsl::ValidationMode;
     use crate::validate::{summarize_violations_lazy, violation_mask_expr};
 
-    // Validation relies on expression masks so we can stay in Lazy mode.
-    let Some(mask_expr) = violation_mask_expr(&validate.checks)
-        .map_err(|e| MlPrepError::ValidationError(e.to_string()))?
-    else {
-        return Ok(lf);
-    };
+    let mask_expr = violation_mask_expr(&validate.checks)
+        .map_err(|e| MlPrepError::ValidationError(e.to_string()))?;
 
     let report = summarize_violations_lazy(lf.clone(), &validate.checks, runtime.streaming)
         .map_err(|e| MlPrepError::ValidationError(format!("Validation execution failed: {}", e)))?;
@@ -313,6 +309,10 @@ fn apply_validate(
         }
         ValidationMode::Warn => Ok(lf),
         ValidationMode::Quarantine => {
+            let Some(mask_expr) = mask_expr else {
+                return Ok(lf);
+            };
+
             let q_path = validate
                 .quarantine_path
                 .as_deref()

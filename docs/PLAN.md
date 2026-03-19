@@ -285,7 +285,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
   * **Video/GIF**: 30秒デモ動画
 * **Verify**: 初見ユーザーがドキュメントのみで基本パイプラインを構築できること。
 
-### PR-22: CLI UX & Guided Workflow `[TODO]`
+### PR-22: CLI UX & Guided Workflow `[DONE]`
 * **Goal**: 初見ユーザーでも迷わずパイプライン作成・実行・検証できる体験を提供。
 * **Deps**: PR-13, PR-17
 * **Tasks**:
