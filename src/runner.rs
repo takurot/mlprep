@@ -3,6 +3,7 @@ use crate::engine::DataPipeline;
 use crate::errors::{MlPrepError, MlPrepResult};
 use crate::io;
 use crate::observability::{self, InputFileStats, Lineage, Metrics};
+use anyhow::anyhow;
 use chrono::Utc;
 use indicatif::{ProgressBar, ProgressStyle};
 use polars::prelude::*;
@@ -37,6 +38,26 @@ fn apply_runtime_env(runtime: &crate::dsl::RuntimeConfig) {
         env::set_var("POLARS_CACHE", if cache { "1" } else { "0" });
         info!("Plan cache {}", if cache { "enabled" } else { "disabled" });
     }
+}
+
+fn collect_input_row_count(input_lf: &LazyFrame) -> MlPrepResult<usize> {
+    let row_count_df = input_lf
+        .clone()
+        .select([len().alias("row_count")])
+        .collect()
+        .map_err(MlPrepError::PolarsError)?;
+    let row_count = row_count_df
+        .column("row_count")
+        .map_err(MlPrepError::PolarsError)?
+        .cast(&DataType::UInt64)
+        .map_err(MlPrepError::PolarsError)?
+        .u64()
+        .map_err(MlPrepError::PolarsError)?
+        .get(0)
+        .ok_or_else(|| MlPrepError::Unknown(anyhow!("row count result was empty")))?;
+
+    usize::try_from(row_count)
+        .map_err(|_| MlPrepError::Unknown(anyhow!("row count does not fit in usize")))
 }
 
 pub fn execution_pipeline(
@@ -161,15 +182,10 @@ pub fn execution_pipeline(
     let start_exec = Instant::now();
     if pipeline.outputs.is_empty() {
         info!("No outputs specified, executing pipeline without output...");
-        let df = processed_dp.collect(runtime.streaming)?;
+        processed_dp.collect(runtime.streaming)?;
         metrics.record_step("execution", start_exec.elapsed());
-        metrics.rows_read = input_lf
-            .select([len()])
-            .collect()
-            .ok()
-            .and_then(|df| df["len"].u32().ok().and_then(|ca| ca.get(0)))
-            .unwrap_or(0) as usize;
-        metrics.rows_written = df.height();
+        metrics.rows_read = collect_input_row_count(&input_lf)?;
+        metrics.rows_written = 0;
         info!("Done.");
         return Ok(metrics);
     }
@@ -192,12 +208,7 @@ pub fn execution_pipeline(
     let mut final_df = processed_dp.collect(runtime.streaming)?;
     metrics.record_step("execution", start_exec.elapsed());
     metrics.rows_written = final_df.height();
-    metrics.rows_read = input_lf
-        .select([len()])
-        .collect()
-        .ok()
-        .and_then(|df| df["len"].u32().ok().and_then(|ca| ca.get(0)))
-        .unwrap_or(0) as usize;
+    metrics.rows_read = collect_input_row_count(&input_lf)?;
 
     let start_write = Instant::now();
     if output_conf.path.ends_with(".parquet") {
@@ -337,5 +348,37 @@ mod tests {
             "rows_read should equal input row count"
         );
         assert_eq!(metrics.rows_written, 3);
+    }
+
+    #[test]
+    fn test_metrics_without_output_leave_rows_written_at_zero() {
+        let dir = tempdir().unwrap();
+        let input_path = dir.path().join("input.csv");
+        let pipeline_path = dir.path().join("pipeline.yaml");
+
+        File::create(&input_path)
+            .unwrap()
+            .write_all(b"a,b\n1,2\n3,4\n5,6\n")
+            .unwrap();
+
+        let pipeline_yaml = format!("inputs:\n  - path: {}\nsteps: []\n", input_path.display());
+        File::create(&pipeline_path)
+            .unwrap()
+            .write_all(pipeline_yaml.as_bytes())
+            .unwrap();
+
+        let metrics = execution_pipeline(
+            &pipeline_path,
+            Uuid::new_v4(),
+            SecurityConfig {
+                allowed_paths: None,
+                mask_columns: None,
+            },
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(metrics.rows_read, 3);
+        assert_eq!(metrics.rows_written, 0);
     }
 }
