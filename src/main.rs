@@ -237,7 +237,7 @@ fn main() -> Result<()> {
             } else {
                 for pipeline in pipelines {
                     let pipeline_run = Uuid::new_v4();
-                    mlprep::runner::execution_pipeline(
+                    let _metrics = mlprep::runner::execution_pipeline(
                         pipeline,
                         pipeline_run,
                         security_config.clone(),
