@@ -1,4 +1,5 @@
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
+use clap_complete::{generate, Shell as CompletionShell};
 use miette::Result;
 use std::path::PathBuf;
 use tracing::Level;
@@ -137,9 +138,9 @@ enum Commands {
 
     /// Generate shell completion scripts
     Completions {
-        /// Shell to generate completions for (bash, zsh, fish, powershell)
-        #[arg(value_name = "SHELL")]
-        shell: String,
+        /// Shell to generate completions for
+        #[arg(value_enum, value_name = "SHELL")]
+        shell: CompletionShell,
     },
 }
 
@@ -279,7 +280,7 @@ fn main() -> Result<()> {
         }
 
         Commands::Completions { shell } => {
-            cmd_completions(shell);
+            cmd_completions(*shell);
         }
     }
 
@@ -368,13 +369,14 @@ fn cmd_lint(pipeline: &PathBuf) -> Result<()> {
             std::process::exit(1);
         }
         Ok(p) => {
-            let mut issues: Vec<String> = Vec::new();
+            let mut errors: Vec<String> = Vec::new();
+            let mut warnings: Vec<String> = Vec::new();
 
             // 2. Check input paths exist
             for input in &p.inputs {
                 let path = std::path::Path::new(&input.path);
                 if !path.exists() {
-                    issues.push(format!("input path does not exist: {}", input.path));
+                    errors.push(format!("input path does not exist: {}", input.path));
                 }
             }
 
@@ -383,7 +385,7 @@ fn cmd_lint(pipeline: &PathBuf) -> Result<()> {
                 let path = std::path::Path::new(&output.path);
                 if let Some(parent) = path.parent() {
                     if !parent.as_os_str().is_empty() && !parent.exists() {
-                        issues.push(format!(
+                        errors.push(format!(
                             "output directory does not exist: {}",
                             parent.display()
                         ));
@@ -393,14 +395,17 @@ fn cmd_lint(pipeline: &PathBuf) -> Result<()> {
 
             // 4. Warn on empty steps
             if p.steps.is_empty() {
-                issues.push("pipeline has no steps".to_string());
+                warnings.push("pipeline has no steps".to_string());
             }
 
-            if issues.is_empty() {
+            if errors.is_empty() {
+                for warning in &warnings {
+                    eprintln!("warning: {}", warning);
+                }
                 println!("OK: pipeline looks valid ({} steps)", p.steps.len());
             } else {
-                for issue in &issues {
-                    eprintln!("lint: {}", issue);
+                for error in &errors {
+                    eprintln!("lint: {}", error);
                 }
                 std::process::exit(1);
             }
@@ -744,18 +749,8 @@ fn cmd_features_transform(
 }
 
 /// Print shell completion script.
-fn cmd_completions(shell: &str) {
-    // Provide basic guidance; full clap_complete integration can be added later
-    match shell.to_lowercase().as_str() {
-        "bash" => println!(
-            "# Add to ~/.bashrc:\n# eval \"$(mlprep completions bash)\"\n# (full completion coming soon)"
-        ),
-        "zsh" => println!(
-            "# Add to ~/.zshrc:\n# eval \"$(mlprep completions zsh)\"\n# (full completion coming soon)"
-        ),
-        "fish" => println!(
-            "# Add to config.fish:\n# mlprep completions fish | source\n# (full completion coming soon)"
-        ),
-        _ => eprintln!("Unknown shell: {}. Supported: bash, zsh, fish", shell),
-    }
+fn cmd_completions(shell: CompletionShell) {
+    let mut cmd = Cli::command();
+    let bin_name = cmd.get_name().to_string();
+    generate(shell, &mut cmd, bin_name, &mut std::io::stdout());
 }

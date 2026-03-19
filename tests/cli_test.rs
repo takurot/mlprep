@@ -148,6 +148,38 @@ fn test_cli_lint_invalid_yaml() {
 }
 
 #[test]
+fn test_cli_lint_empty_steps_warns_without_failing() {
+    let dir = tempdir().unwrap();
+    let input_path = dir.path().join("input.csv");
+    let output_path = dir.path().join("output.parquet");
+    let config_path = dir.path().join("pipeline.yaml");
+
+    fs::write(&input_path, "a,b\n1,2").unwrap();
+
+    let yaml = format!(
+        r#"
+inputs:
+  - path: "{input}"
+steps: []
+outputs:
+  - path: "{output}"
+"#,
+        input = input_path.to_str().unwrap(),
+        output = output_path.to_str().unwrap()
+    );
+    fs::write(&config_path, yaml).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_mlprep"))
+        .args(["lint", config_path.to_str().unwrap()])
+        .output()
+        .expect("Failed to run mlprep lint");
+
+    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("warning: pipeline has no steps"));
+}
+
+#[test]
 fn test_cli_plan_pipeline() {
     let dir = tempdir().unwrap();
     let input_path = dir.path().join("input.csv");
@@ -397,4 +429,30 @@ features:
 
     assert!(transform_status.success());
     assert!(out_path.exists());
+}
+
+#[test]
+fn test_cli_completions_bash_outputs_script() {
+    let output = Command::new(env!("CARGO_BIN_EXE_mlprep"))
+        .args(["completions", "bash"])
+        .output()
+        .expect("Failed to run mlprep completions bash");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.trim().is_empty());
+    assert!(stdout.contains("mlprep"));
+    assert!(!stdout.contains("coming soon"));
+}
+
+#[test]
+fn test_cli_completions_powershell_outputs_script() {
+    let output = Command::new(env!("CARGO_BIN_EXE_mlprep"))
+        .args(["completions", "powershell"])
+        .output()
+        .expect("Failed to run mlprep completions powershell");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Register-ArgumentCompleter"));
 }
