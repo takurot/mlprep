@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct Pipeline {
     #[serde(default)]
     pub inputs: Vec<Input>,
@@ -49,6 +50,7 @@ impl Pipeline {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct Input {
     pub path: String,
     #[serde(default)]
@@ -59,6 +61,7 @@ pub struct Input {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct Output {
     pub path: String,
     #[serde(default)]
@@ -68,6 +71,7 @@ pub struct Output {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Default)]
+#[serde(deny_unknown_fields)]
 pub struct RuntimeConfig {
     pub threads: Option<String>,
     pub cache: Option<bool>,
@@ -93,22 +97,26 @@ pub enum Step {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct Select {
     pub columns: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct Filter {
     pub condition: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct Cast {
     pub columns: HashMap<String, String>,
 }
 
 /// Sort: Order rows by one or more columns
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct Sort {
     pub by: Vec<String>,
     #[serde(default)]
@@ -117,6 +125,7 @@ pub struct Sort {
 
 /// Join: Combine two DataFrames
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct Join {
     pub right_path: String,
     pub left_on: Vec<String>,
@@ -131,6 +140,7 @@ fn default_join_how() -> String {
 
 /// GroupBy: Aggregate data by groups
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct GroupBy {
     pub by: Vec<String>,
     pub aggs: HashMap<String, Agg>,
@@ -138,6 +148,7 @@ pub struct GroupBy {
 
 /// Aggregation function specification
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct Agg {
     pub func: String,
     pub alias: Option<String>,
@@ -145,6 +156,7 @@ pub struct Agg {
 
 /// Window: Window/rolling functions
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct Window {
     pub partition_by: Vec<String>,
     pub order_by: Option<String>,
@@ -153,6 +165,7 @@ pub struct Window {
 
 /// Window operation specification
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct WindowOp {
     pub column: String,
     pub func: String,
@@ -161,6 +174,7 @@ pub struct WindowOp {
 
 /// FillNull: Strategy to fill missing values
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct FillNull {
     pub columns: Vec<String>,
     pub strategy: FillNullStrategy,
@@ -182,6 +196,7 @@ pub enum FillNullStrategy {
 
 /// DropNull: Remove rows with nulls in specified columns
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct DropNull {
     pub columns: Vec<String>,
 }
@@ -203,6 +218,7 @@ pub enum Check {
 
 /// Column-level check specification
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct ColumnCheck {
     pub name: String,
     #[serde(default)]
@@ -219,6 +235,7 @@ pub struct ColumnCheck {
 
 /// Dataset-level checks
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Default)]
+#[serde(deny_unknown_fields)]
 pub struct DatasetCheck {
     #[serde(default)]
     pub row_count_min: Option<u64>,
@@ -230,6 +247,7 @@ pub struct DatasetCheck {
 
 /// Validation configuration (checks.yaml structure)
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct CheckConfig {
     #[serde(default)]
     pub columns: Vec<ColumnCheck>,
@@ -252,6 +270,7 @@ pub enum ValidationMode {
 
 /// Validate step for pipeline
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct Validate {
     pub checks: CheckConfig,
     #[serde(default)]
@@ -264,6 +283,7 @@ pub struct Validate {
 
 /// Feature engineering step
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct Features {
     pub config: crate::features::FeatureConfig,
     /// Path to load/save FeatureState (optional)
@@ -510,5 +530,29 @@ steps: []
         let runtime = pipeline.runtime.unwrap();
         assert!(runtime.streaming);
         assert_eq!(runtime.memory_limit, Some("4GB".to_string()));
+    }
+
+    #[test]
+    fn test_deserialize_pipeline_unknown_field_fails() {
+        let yaml = r#"
+steps:
+  - type: select
+    columns: ["a"]
+stepps: []
+"#;
+        let err = serde_yaml::from_str::<Pipeline>(yaml).unwrap_err();
+        assert!(err.to_string().contains("unknown field"));
+    }
+
+    #[test]
+    fn test_deserialize_check_config_unknown_field_fails() {
+        let yaml = r#"
+dataset:
+  row_count_min: 10
+  missing_rate_max:
+    age: 0.1
+"#;
+        let err = serde_yaml::from_str::<CheckConfig>(yaml).unwrap_err();
+        assert!(err.to_string().contains("unknown field"));
     }
 }

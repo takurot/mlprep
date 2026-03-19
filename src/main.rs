@@ -156,7 +156,7 @@ enum FeaturesCommands {
         #[arg(long = "in", value_name = "INPUT_FILE")]
         input: PathBuf,
 
-        /// Output path for the feature state JSON
+        /// Output path for the feature state JSON file or directory
         #[arg(long, value_name = "OUTPUT_PATH")]
         out: PathBuf,
     },
@@ -303,16 +303,17 @@ fn cmd_init(output: &PathBuf, from: Option<&PathBuf>) -> Result<()> {
             .map_err(MlPrepError::PolarsError)
             .map_err(miette::Report::new)?;
         let columns: Vec<String> = schema.iter_names().map(|n| n.to_string()).collect();
-        let csv_str = csv_path.display();
+        let csv_str = csv_path.display().to_string();
+        let quoted_csv_path = yaml_quote(&csv_str);
         let cols_yaml = columns
             .iter()
-            .map(|c| format!("      - \"{}\"", c))
+            .map(|c| format!("      - {}", yaml_quote(c)))
             .collect::<Vec<_>>()
             .join("\n");
         format!(
             r#"# mlprep pipeline – generated from {csv_str}
 inputs:
-  - path: "{csv_str}"
+  - path: {quoted_csv_path}
 
 steps:
   - type: select
@@ -323,6 +324,7 @@ outputs:
   - path: "output.parquet"
 "#,
             csv_str = csv_str,
+            quoted_csv_path = quoted_csv_path,
             cols_yaml = cols_yaml
         )
     } else {
@@ -355,6 +357,10 @@ outputs:
 
     println!("Template written to {}", output.display());
     Ok(())
+}
+
+fn yaml_quote(value: &str) -> String {
+    serde_json::to_string(value).expect("JSON string escaping should never fail")
 }
 
 /// Lint a pipeline YAML for errors.
@@ -629,7 +635,11 @@ fn cmd_validate(checks_path: &PathBuf, data_path: &PathBuf) -> Result<()> {
 }
 
 /// Fit feature transformers and save state.
-fn cmd_features_fit(config_path: &PathBuf, input_path: &PathBuf, out_path: &PathBuf) -> Result<()> {
+fn cmd_features_fit(
+    config_path: &PathBuf,
+    input_path: &PathBuf,
+    out_path: &std::path::Path,
+) -> Result<()> {
     use mlprep::errors::MlPrepError;
     use mlprep::features::{fit_features, FeatureConfig, FeatureState};
 
@@ -662,18 +672,41 @@ fn cmd_features_fit(config_path: &PathBuf, input_path: &PathBuf, out_path: &Path
         .map_err(|e| MlPrepError::FeatureError(e.to_string()))
         .map_err(miette::Report::new)?;
 
+    let resolved_out_path = resolve_feature_state_output(out_path)
+        .map_err(MlPrepError::IoError)
+        .map_err(miette::Report::new)?;
+
     // Save state
     state
-        .save(out_path)
+        .save(&resolved_out_path)
         .map_err(|e| MlPrepError::FeatureError(e.to_string()))
         .map_err(miette::Report::new)?;
 
     println!(
         "Feature state ({} entries) saved to {}",
         state.entries.len(),
-        out_path.display()
+        resolved_out_path.display()
     );
     Ok(())
+}
+
+fn resolve_feature_state_output(out_path: &std::path::Path) -> std::io::Result<PathBuf> {
+    let raw = out_path.as_os_str().to_string_lossy();
+    let looks_like_dir = raw.ends_with(std::path::MAIN_SEPARATOR) || out_path.extension().is_none();
+
+    if out_path.exists() {
+        if out_path.is_dir() {
+            return Ok(out_path.join("feature_state.json"));
+        }
+        return Ok(out_path.to_path_buf());
+    }
+
+    if looks_like_dir {
+        std::fs::create_dir_all(out_path)?;
+        return Ok(out_path.join("feature_state.json"));
+    }
+
+    Ok(out_path.to_path_buf())
 }
 
 /// Transform data using a previously fitted feature state.

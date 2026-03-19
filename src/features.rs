@@ -24,6 +24,7 @@ pub enum FeatureTransform {
 
 /// Specification for a single feature transformation
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct FeatureSpec {
     pub column: String,
     pub transform: FeatureTransform,
@@ -33,6 +34,7 @@ pub struct FeatureSpec {
 
 /// Configuration for feature engineering pipeline
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct FeatureConfig {
     pub features: Vec<FeatureSpec>,
 }

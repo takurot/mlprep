@@ -96,6 +96,34 @@ fn test_cli_init_from_csv() {
 }
 
 #[test]
+fn test_cli_init_from_csv_with_quoted_header_generates_valid_yaml() {
+    let dir = tempdir().unwrap();
+    let csv_path = dir.path().join("data.csv");
+    let output_path = dir.path().join("pipeline.yaml");
+
+    fs::write(&csv_path, "\"bad\"\"name\",age\nalice,30").unwrap();
+
+    let init_status = Command::new(env!("CARGO_BIN_EXE_mlprep"))
+        .args([
+            "init",
+            "--from",
+            csv_path.to_str().unwrap(),
+            output_path.to_str().unwrap(),
+        ])
+        .status()
+        .expect("Failed to run mlprep init --from");
+
+    assert!(init_status.success());
+
+    let lint_output = Command::new(env!("CARGO_BIN_EXE_mlprep"))
+        .args(["lint", output_path.to_str().unwrap()])
+        .output()
+        .expect("Failed to lint generated pipeline");
+
+    assert!(lint_output.status.success());
+}
+
+#[test]
 fn test_cli_lint_valid_pipeline() {
     let dir = tempdir().unwrap();
     let input_path = dir.path().join("input.csv");
@@ -145,6 +173,43 @@ fn test_cli_lint_invalid_yaml() {
         .expect("Failed to run mlprep lint");
 
     assert!(!status.success());
+}
+
+#[test]
+fn test_cli_lint_unknown_key_fails() {
+    let dir = tempdir().unwrap();
+    let input_path = dir.path().join("input.csv");
+    let config_path = dir.path().join("pipeline.yaml");
+    let output_path = dir.path().join("out.parquet");
+
+    fs::write(&input_path, "a,b\n1,2").unwrap();
+
+    let yaml = format!(
+        r#"
+inputs:
+  - path: "{input}"
+steps:
+  - type: select
+    columns: ["a"]
+stepps:
+  - type: filter
+    condition: "a > 0"
+outputs:
+  - path: "{output}"
+"#,
+        input = input_path.to_str().unwrap(),
+        output = output_path.to_str().unwrap()
+    );
+    fs::write(&config_path, yaml).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_mlprep"))
+        .args(["lint", config_path.to_str().unwrap()])
+        .output()
+        .expect("Failed to run mlprep lint");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("unknown field"));
 }
 
 #[test]
@@ -341,6 +406,34 @@ columns:
 }
 
 #[test]
+fn test_cli_validate_dataset_fail() {
+    let dir = tempdir().unwrap();
+    let data_path = dir.path().join("data.csv");
+    let checks_path = dir.path().join("checks.yaml");
+
+    fs::write(&data_path, "age\n25\n30").unwrap();
+
+    let checks_yaml = r#"
+dataset:
+  row_count_min: 10
+"#;
+    fs::write(&checks_path, checks_yaml).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_mlprep"))
+        .args([
+            "validate",
+            checks_path.to_str().unwrap(),
+            data_path.to_str().unwrap(),
+        ])
+        .output()
+        .expect("Failed to run mlprep validate");
+
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("row count"));
+}
+
+#[test]
 fn test_cli_features_fit() {
     let dir = tempdir().unwrap();
     let data_path = dir.path().join("train.csv");
@@ -376,6 +469,40 @@ features:
     let json: serde_json::Value = serde_json::from_str(&content).unwrap();
     assert!(json["entries"].is_array());
     assert!(!json["entries"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn test_cli_features_fit_directory_output() {
+    let dir = tempdir().unwrap();
+    let data_path = dir.path().join("train.csv");
+    let config_path = dir.path().join("features.yaml");
+    let out_dir = dir.path().join("feature_pack");
+
+    fs::write(&data_path, "value\n1.0\n2.0\n3.0").unwrap();
+    fs::create_dir(&out_dir).unwrap();
+
+    let config_yaml = r#"
+features:
+  - column: value
+    transform: min_max_scale
+"#;
+    fs::write(&config_path, config_yaml).unwrap();
+
+    let status = Command::new(env!("CARGO_BIN_EXE_mlprep"))
+        .args([
+            "features",
+            "fit",
+            config_path.to_str().unwrap(),
+            "--in",
+            data_path.to_str().unwrap(),
+            "--out",
+            out_dir.to_str().unwrap(),
+        ])
+        .status()
+        .expect("Failed to run mlprep features fit");
+
+    assert!(status.success());
+    assert!(out_dir.join("feature_state.json").exists());
 }
 
 #[test]

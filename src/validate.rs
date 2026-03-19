@@ -3,8 +3,9 @@
 //! Implements NotNull, Unique, Range, Regex, and Enum checks with
 //! strict, warn, and quarantine execution modes.
 
-use crate::dsl::{CheckConfig, ColumnCheck, ValidationMode};
+use crate::dsl::{CheckConfig, ColumnCheck, DatasetCheck, ValidationMode};
 use anyhow::{anyhow, Result};
+use polars::prelude::UniqueKeepStrategy;
 use polars::prelude::*;
 
 /// Represents a single validation violation
@@ -184,12 +185,129 @@ fn violation_from_count(check: &ColumnCheck, count: usize) -> Option<Violation> 
     })
 }
 
+fn dataset_violation(check_type: &str, message: String, count: usize) -> ValidationResult {
+    ValidationResult {
+        passed: false,
+        violations: vec![Violation {
+            column: "__dataset__".to_string(),
+            check_type: check_type.to_string(),
+            message,
+            count,
+        }],
+    }
+}
+
+fn dataset_validation_results(
+    row_count: usize,
+    unique_row_count: Option<usize>,
+    dataset: &DatasetCheck,
+) -> Vec<ValidationResult> {
+    let mut results = Vec::new();
+
+    if let Some(min) = dataset.row_count_min {
+        if (row_count as u64) < min {
+            results.push(dataset_violation(
+                "row_count_min",
+                format!("Dataset row count {} is below minimum {}", row_count, min),
+                1,
+            ));
+        } else {
+            results.push(ValidationResult {
+                passed: true,
+                violations: vec![],
+            });
+        }
+    }
+
+    if let Some(max) = dataset.row_count_max {
+        if (row_count as u64) > max {
+            results.push(dataset_violation(
+                "row_count_max",
+                format!("Dataset row count {} exceeds maximum {}", row_count, max),
+                1,
+            ));
+        } else {
+            results.push(ValidationResult {
+                passed: true,
+                violations: vec![],
+            });
+        }
+    }
+
+    if let Some(max_rate) = dataset.duplicate_rate_max {
+        let unique_row_count = unique_row_count.unwrap_or(row_count);
+        let duplicate_rows = row_count.saturating_sub(unique_row_count);
+        let duplicate_rate = if row_count == 0 {
+            0.0
+        } else {
+            duplicate_rows as f64 / row_count as f64
+        };
+
+        if duplicate_rate > max_rate {
+            results.push(dataset_violation(
+                "duplicate_rate_max",
+                format!(
+                    "Dataset duplicate rate {:.4} exceeds maximum {:.4} ({} duplicate rows)",
+                    duplicate_rate, max_rate, duplicate_rows
+                ),
+                duplicate_rows.max(1),
+            ));
+        } else {
+            results.push(ValidationResult {
+                passed: true,
+                violations: vec![],
+            });
+        }
+    }
+
+    results
+}
+
+fn summarize_dataset_checks_df(
+    df: &DataFrame,
+    dataset: &DatasetCheck,
+) -> Result<Vec<ValidationResult>> {
+    let row_count = df.height();
+    let unique_row_count = if dataset.duplicate_rate_max.is_some() {
+        Some(
+            df.clone()
+                .lazy()
+                .unique(None, UniqueKeepStrategy::First)
+                .collect()
+                .map_err(|e| anyhow!("Failed to evaluate dataset duplicate rate: {}", e))?
+                .height(),
+        )
+    } else {
+        None
+    };
+
+    Ok(dataset_validation_results(
+        row_count,
+        unique_row_count,
+        dataset,
+    ))
+}
+
 /// Summarize violations lazily by aggregating violation counts per check.
 pub fn summarize_violations_lazy(
     lf: LazyFrame,
     config: &CheckConfig,
     streaming: bool,
 ) -> Result<ValidationReport> {
+    let mut report = ValidationReport::new();
+
+    if let Some(dataset) = &config.dataset {
+        let dataset_df = lf
+            .clone()
+            .with_streaming(streaming)
+            .collect()
+            .map_err(|e| anyhow!("Failed to collect dataset validation metrics: {}", e))?;
+
+        for result in summarize_dataset_checks_df(&dataset_df, dataset)? {
+            report.add_result(result);
+        }
+    }
+
     let mut agg_exprs: Vec<Expr> = Vec::new();
     for (idx, check) in config.columns.iter().enumerate() {
         let mask_expr = build_violation_expr(check)?;
@@ -198,7 +316,7 @@ pub fn summarize_violations_lazy(
     }
 
     if agg_exprs.is_empty() {
-        return Ok(ValidationReport::new());
+        return Ok(report);
     }
 
     let counts_df = lf
@@ -207,7 +325,6 @@ pub fn summarize_violations_lazy(
         .collect()
         .map_err(|e| anyhow!("Failed to collect validation summary: {}", e))?;
 
-    let mut report = ValidationReport::new();
     for (idx, check) in config.columns.iter().enumerate() {
         let col_name = format!("check{}_{}", idx, check_label(check));
         let count = counts_df
@@ -515,6 +632,12 @@ pub fn run_validation(
         }
     }
 
+    if let Some(dataset) = &config.dataset {
+        for result in summarize_dataset_checks_df(&df, dataset)? {
+            report.add_result(result);
+        }
+    }
+
     // Handle based on mode
     match mode {
         ValidationMode::Strict => {
@@ -769,5 +892,58 @@ mod tests {
         assert!(!report.passed); // validation failed
         assert_eq!(valid_df.height(), 3); // but all rows are kept
         assert!(quarantine_df.is_none()); // no quarantine in warn mode
+    }
+
+    #[test]
+    fn test_run_validation_dataset_row_count_fail() {
+        let df = df! {
+            "id" => &[1, 2, 3]
+        }
+        .unwrap();
+
+        let config = CheckConfig {
+            columns: vec![],
+            dataset: Some(DatasetCheck {
+                row_count_min: Some(5),
+                row_count_max: None,
+                duplicate_rate_max: None,
+            }),
+        };
+
+        let masker = crate::security::Masker::new(vec![]);
+        let (_, _, report) = run_validation(df, &config, &ValidationMode::Warn, &masker).unwrap();
+
+        assert!(!report.passed);
+        assert_eq!(report.total_violations, 1);
+        assert_eq!(report.results.len(), 1);
+        assert_eq!(report.results[0].violations[0].check_type, "row_count_min");
+    }
+
+    #[test]
+    fn test_summarize_violations_lazy_dataset_duplicate_rate_fail() {
+        let df = df! {
+            "id" => &[1, 1, 2, 2],
+            "value" => &["a", "a", "b", "b"]
+        }
+        .unwrap();
+
+        let config = CheckConfig {
+            columns: vec![],
+            dataset: Some(DatasetCheck {
+                row_count_min: None,
+                row_count_max: None,
+                duplicate_rate_max: Some(0.2),
+            }),
+        };
+
+        let report = summarize_violations_lazy(df.lazy(), &config, false).unwrap();
+
+        assert!(!report.passed);
+        assert_eq!(report.total_violations, 2);
+        assert_eq!(report.results.len(), 1);
+        assert_eq!(
+            report.results[0].violations[0].check_type,
+            "duplicate_rate_max"
+        );
     }
 }
