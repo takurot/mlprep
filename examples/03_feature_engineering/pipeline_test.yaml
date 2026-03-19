@@ -1,4 +1,3 @@
-name: feature_eng_test
 inputs:
   - path: test_data.csv
     format: csv

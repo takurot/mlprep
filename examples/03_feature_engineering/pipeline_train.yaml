@@ -1,4 +1,3 @@
-name: feature_eng_train
 inputs:
   - path: train_data.csv
     format: csv
