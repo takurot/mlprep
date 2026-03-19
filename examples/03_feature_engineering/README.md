@@ -1,18 +1,39 @@
 # Feature Engineering Example
 
-This example demonstrates how to fit feature transformers (Scaler, OneHot) on training data and apply them to test data.
+This example demonstrates how to fit feature transformers (Scaler, OneHot) on training data
+and apply them to test data without data leakage.
 
-## Scenario
-1. **Fit**: Learn mean/std from `train_data.csv` for scaling, and categories for OneHot encoding.
-2. **Transform**: Apply the learned parameters to `test_data.csv`.
+## The Problem: Data Leakage
 
-**Note**: In the current version, `mlprep` persists feature state automatically in `feature_state.json` (or similar, depending on implementation detail). Ensure `pipeline_test.yaml` reuses this state. (Wait, checking current implementation: PR-08 implemented state persistence but it's implicit in the run if specified, usually explicitly saving/loading state is a feature. Let's assume for this example that running the pipeline on train saves state, and test reuses it if configured. Actually, looking at PR-08 tasks, it mentioned "state persistence". Let's verify if CLI supports explicit state file flags or if it's automatic based on pipeline name/directory.)
+If you run the test pipeline without referencing the training statistics, `mlprep` will
+refit the scalers and encoders on the test data. This means the test data is scaled using
+its own mean and standard deviation rather than the training set's — causing **data leakage**
+and inconsistent feature representations between training and inference.
 
-*Correction*: For now, we assume standard `fit_transform` behavior. If explicit state loading is needed for the second run, we might need a flag like `--state`. If not implemented yet, we essentially demonstrate two independent runs or a single run if the pipeline handled both (it doesn't).
+## The Solution: `state_path`
 
-Let's assume the standard flow:
-1. `mlprep run pipeline_train.yaml` (Fits and Transforms Train)
-2. `mlprep run pipeline_test.yaml` (Ideally should load state, but if not yet fully wired in CLI arguments, it might just re-fit. For MVP this example shows HOW to define features.)
+Both pipelines specify the same `state_path: feature_state.json` inside the `features` step:
+
+- **Train pipeline** (`pipeline_train.yaml`): fits transformers on `train_data.csv` and
+  **saves** the learned parameters (mean, std, categories) to `feature_state.json`.
+- **Test pipeline** (`pipeline_test.yaml`): **loads** the saved parameters from
+  `feature_state.json` and applies them to `test_data.csv`.
+
+The `state_path` field must be a sibling of `config` inside the step — not nested under it:
+
+```yaml
+steps:
+  - type: features
+    config:
+      features:
+        - column: age
+          transform: standard_scale
+        - column: income
+          transform: standard_scale
+        - column: city
+          transform: one_hot_encode
+    state_path: feature_state.json   # <-- sibling of config, not inside it
+```
 
 ## Steps
 
@@ -21,14 +42,17 @@ Let's assume the standard flow:
    python generate_train_test.py
    ```
 
-2. **Run Train Pipeline**:
+2. **Run Train Pipeline** (fits transformers and saves state):
    ```bash
    mlprep run pipeline_train.yaml
    ```
-   Check `train_features.parquet`.
+   This writes `feature_state.json` and `train_features.parquet`.
 
-3. **Run Test Pipeline**:
+3. **Run Test Pipeline** (loads state from training and transforms test data):
    ```bash
    mlprep run pipeline_test.yaml
    ```
-   Check `test_features.parquet`.
+   This reads `feature_state.json` and writes `test_features.parquet`.
+
+Both output files will use the same scaling parameters and one-hot encoding categories,
+ensuring consistency between training and inference.

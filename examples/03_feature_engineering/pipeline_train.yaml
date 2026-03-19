@@ -13,6 +13,7 @@ steps:
           transform: standard_scale
         - column: city
           transform: one_hot_encode
+    state_path: feature_state.json
 
 outputs:
   - path: train_features.parquet
