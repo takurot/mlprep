@@ -388,7 +388,7 @@ MVP (Phase 1) を確実にリリースするための、Pull Request (PR) 単位
   * Lazy evaluation との整合性確保
   * ベンチマークによる効果測定
 * **Verify**: scaling処理で map 使用時比 1.5x 以上の高速化。
-### PR-25: Async I/O and Pipeline Parallelism `[TODO]`
+### PR-25: Async I/O and Pipeline Parallelism `[DONE]`
 * **Goal**: I/O とCPU 処理のオーバーラップによる全体スループット向上。
 * **Deps**: PR-16
 * **Tasks**:

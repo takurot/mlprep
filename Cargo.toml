@@ -44,6 +44,7 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 sha2 = "0.10"
 chrono = { version = "0.4", features = ["serde"] }
 rayon = "1.11.0"
+tokio = { version = "1", features = ["rt-multi-thread", "fs"], optional = true }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 tikv-jemallocator = "0.6"
@@ -51,6 +52,8 @@ tikv-jemallocator = "0.6"
 [features]
 simd = []
 extension-module = ["pyo3/extension-module"]
+# parallel-io: enables tokio-based async file I/O (opt-in; rayon parallelism is always active)
+parallel-io = ["tokio"]
 default = []
 
 [dev-dependencies]
