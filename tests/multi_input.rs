@@ -246,7 +246,7 @@ fn test_read_all_inputs_unit() {
         },
     ];
 
-    let lf = read_all_inputs(&inputs).expect("read_all_inputs should succeed");
+    let lf = read_all_inputs(&inputs, None).expect("read_all_inputs should succeed");
     let df = lf.collect().expect("collect should succeed");
     assert_eq!(df.height(), 4, "should have 4 rows (2+2)");
     assert_eq!(df.width(), 1, "should have 1 column");
