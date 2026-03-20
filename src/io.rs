@@ -1,6 +1,43 @@
+use crate::dsl::Input;
 use crate::errors::{MlPrepError, MlPrepResult};
 use polars::prelude::*;
+use rayon::prelude::*;
+use serde::de::Error as _;
 use std::path::Path;
+
+/// Read a single [`Input`] descriptor as a [`LazyFrame`].
+pub fn read_input(input: &Input) -> MlPrepResult<LazyFrame> {
+    let path = &input.path;
+    if path.ends_with(".parquet") {
+        read_parquet(path)
+    } else {
+        read_csv(path)
+    }
+}
+
+/// Read all inputs in parallel (using rayon) and concatenate them into one
+/// [`LazyFrame`].  Falls back to sequential reading when only one input is
+/// given, avoiding rayon overhead for the common case.
+pub fn read_all_inputs(inputs: &[Input]) -> MlPrepResult<LazyFrame> {
+    match inputs {
+        [] => Err(MlPrepError::ConfigError(
+            serde_yaml::Error::custom("No inputs specified"),
+            None,
+        )),
+        [single] => read_input(single),
+        _ => {
+            // Read all files in parallel and surface the first error if any.
+            let results: Vec<MlPrepResult<LazyFrame>> = inputs.par_iter().map(read_input).collect();
+
+            let mut frames = Vec::with_capacity(results.len());
+            for result in results {
+                frames.push(result?);
+            }
+
+            concat(frames, UnionArgs::default()).map_err(MlPrepError::PolarsError)
+        }
+    }
+}
 
 pub fn read_csv<P: AsRef<Path>>(path: P) -> MlPrepResult<LazyFrame> {
     LazyCsvReader::new(path)

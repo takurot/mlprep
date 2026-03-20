@@ -133,16 +133,19 @@ pub fn execution_pipeline(
         });
     }
 
-    // For MVP, handle first input
-    let input_conf = &pipeline.inputs[0];
-    info!("Reading input: {:?}", input_conf.path);
-    let start_read = Instant::now();
-
-    let lf = if input_conf.path.ends_with(".parquet") {
-        io::read_parquet(&input_conf.path)?
+    // Read all inputs in parallel and concatenate into one LazyFrame.
+    let input_count = pipeline.inputs.len();
+    if input_count == 1 {
+        info!("Reading input: {:?}", pipeline.inputs[0].path);
     } else {
-        io::read_csv(&input_conf.path)?
-    };
+        info!(
+            "Reading {} inputs in parallel: {:?}",
+            input_count,
+            pipeline.inputs.iter().map(|i| &i.path).collect::<Vec<_>>()
+        );
+    }
+    let start_read = Instant::now();
+    let lf = io::read_all_inputs(&pipeline.inputs)?;
     let input_lf = lf.clone();
     metrics.record_step("read_input", start_read.elapsed());
 
